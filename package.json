@@ -1,35 +1,23 @@
 {
-  "name": "custom_coded_backend",
+  "name": "custom-coded-backend",
   "version": "1.0.0",
-  "description": "This is the backend part of the custom coded website which consist of Node.",
-  "main": "index.js",
+  "description": "Custom Coded Backend API",
+  "main": "src/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node src/index.js",
     "dev": "nodemon src/index.js"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/devsgtech/Custom_Coded_Backend.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/devsgtech/Custom_Coded_Backend/issues"
-  },
-  "homepage": "https://github.com/devsgtech/Custom_Coded_Backend#readme",
   "dependencies": {
-    "body-parser": "^1.20.3",
+    "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
-    "dotenv": "^16.4.7",
-    "express": "^4.21.2",
+    "dotenv": "^16.0.3",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.0",
     "mysql2": "^3.14.0",
-    "npm": "^11.2.0",
-    "sequelize": "^6.37.6",
-    "sequelize-cli": "^6.6.2"
+    "sequelize": "^6.37.6"
   },
   "devDependencies": {
-    "nodemon": "^3.1.9"
+    "nodemon": "^2.0.22",
+    "sequelize-cli": "^6.6.2"
   }
 }
