@@ -41,3 +41,11 @@ db.sequelize = sequelize;
 db.Sequelize = Sequelize;
 
 module.exports = db;
+db.sequelize
+  .authenticate()
+  .then(() => {
+    console.log('✅ Database connected successfully.');
+  })
+  .catch(err => {
+    console.error('❌ Unable to connect to the database:', err);
+  });
