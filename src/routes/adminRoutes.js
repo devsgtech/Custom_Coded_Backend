@@ -1,9 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const { validateAdminLogin } = require('../middleware/adminValidation');
 const { login } = require('../controllers/adminController');
 
 // Admin login route
-router.post('/login', validateAdminLogin, login);
+router.post('/login', login);
 
 module.exports = router; 

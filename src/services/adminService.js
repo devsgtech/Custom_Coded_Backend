@@ -13,8 +13,14 @@ const adminService = {
             console.log('Query result:', rows);
             return rows[0];
         } catch (error) {
-            console.error('Database error in findAdminByEmail:', error);
-            throw new Error('Database error occurred');
+            console.error('Database error in findAdminByEmail:', {
+                message: error.message,
+                code: error.code,
+                errno: error.errno,
+                sqlState: error.sqlState,
+                sqlMessage: error.sqlMessage
+            });
+            throw new Error(`Database error: ${error.message}`);
         }
     },
 
@@ -24,8 +30,9 @@ const adminService = {
             const query = `
                 INSERT INTO tbl_admin_session_details 
                 (admin_id, token, token_expiry, session_start, session_ip, session_end) 
-                VALUES (?, ?, ?, NOW(), ?, DATE_ADD(NOW(), INTERVAL 15 MINUTE))
+                VALUES (?, ?, ?, NOW(), ?, DATE_ADD(NOW(), INTERVAL 10 HOUR))
             `;
+            console.log('Creating session with params:', { adminId, tokenExpiry, ipAddress });
             const [result] = await pool.execute(query, [
                 adminId,
                 token,
@@ -35,8 +42,14 @@ const adminService = {
             console.log('Session created with ID:', result.insertId);
             return result.insertId;
         } catch (error) {
-            console.error('Error creating admin session:', error);
-            throw new Error('Failed to create session');
+            console.error('Error creating admin session:', {
+                message: error.message,
+                code: error.code,
+                errno: error.errno,
+                sqlState: error.sqlState,
+                sqlMessage: error.sqlMessage
+            });
+            throw new Error(`Failed to create session: ${error.message}`);
         }
     },
 
@@ -47,18 +60,28 @@ const adminService = {
             return password === hashedPassword;
         } catch (error) {
             console.error('Error verifying password:', error);
-            throw new Error('Password verification failed');
+            throw new Error(`Password verification failed: ${error.message}`);
         }
     },
 
     // Generate JWT token
     generateToken: (admin) => {
-        return authService.generateToken(admin);
+        try {
+            return authService.generateToken(admin);
+        } catch (error) {
+            console.error('Error generating token:', error);
+            throw new Error(`Token generation failed: ${error.message}`);
+        }
     },
 
     // Get token expiry date
     getTokenExpiry: () => {
-        return authService.getTokenExpiry();
+        try {
+            return authService.getTokenExpiry();
+        } catch (error) {
+            console.error('Error getting token expiry:', error);
+            throw new Error(`Failed to get token expiry: ${error.message}`);
+        }
     }
 };
 

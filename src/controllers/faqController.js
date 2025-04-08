@@ -1,63 +1,125 @@
 const faqService = require('../services/faqService');
 const response = require('../utils/response');
+const jwt = require('jsonwebtoken');
+const { createFaqSchema,updateFaqSchema,deleteFaqSchema } = require('../middleware/Validation');
 
-const createFaq = async (req, res) => {
+// Get all FAQs
+const getFaqList = async (req, res) => {
     try {
-        const { faq_question, faq_answer, admin_id } = req.body.faq_data;
-        const { token } = req.body;
-
-        // First validate token exists
-        if (!token) {
-            return response.error(res, 'Token is required', 400);
-        }
-
-        // Then validate admin_id exists
-        if (!admin_id) {
-            return response.error(res, 'Admin ID is required', 400);
-        }
-
-        // Verify token matches admin_id
-        const isTokenValid = await faqService.verifyAdminToken(admin_id, token);
-        if (!isTokenValid) {
-            return response.error(res, 'Invalid token for this admin', 401);
-        }
-
-        // Verify admin exists
-        const isAdminValid = await faqService.verifyAdmin(admin_id);
-        if (!isAdminValid) {
-            return response.error(res, 'Invalid admin user', 403);
-        }
-
-        // Finally validate FAQ data
-        if (!faq_question || !faq_answer) {
-            return response.error(res, 'Question and answer are required', 400);
-        }
-
-        // Create FAQ entry
-        const faqId = await faqService.createFaq({
-            faq_question,
-            faq_answer,
-            admin_id
-        });
-
-        return response.success(res, null, 'FAQ created successfully', 201);
+        const faqs = await faqService.getAllFaqs();
+        return response.success(res, faqs, 'FAQs fetched successfully');
     } catch (error) {
-        console.error('FAQ creation error:', error);
-        return response.error(res, 'Failed to create FAQ', 500);
+        console.error('Error in getFaqList:', error);
+        return response.error(res, error.message);
     }
 };
 
-const getFaqList = async (req, res) => {
+// Create FAQ
+const createFaq = async (req, res) => {
     try {
-        const faqs = await faqService.getFaqList();
-        return response.success(res, faqs, 'FAQs fetched successfully');
+        // Validate request body
+        const { error, value } = createFaqSchema.validate(req.body);
+        if (error) {
+            return response.validationError(res, error.details[0].message.replace(/"/g, ''));
+        }
+
+        const { token, faq_data } = value;
+
+        // Verify admin token and get admin_id from token
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const admin_id = decoded.id;
+
+        // Verify admin token
+        const isTokenValid = await faqService.verifyAdminToken(admin_id, token);
+        if (!isTokenValid) {
+            return response.unauthorized(res, 'Invalid or expired token');
+        }
+
+        const faqId = await faqService.createFaq({ 
+            question: faq_data.faq_question, 
+            answer: faq_data.faq_answer,
+            admin_id: admin_id
+        });
+        return response.success(res, { id: faqId, ...faq_data }, 'FAQ created successfully');
     } catch (error) {
-        console.error('Error fetching FAQs:', error);
-        return response.error(res, 'Failed to fetch FAQs', 500);
+        console.error('Error in createFaq:', error);
+        if (error.name === 'JsonWebTokenError') {
+            return response.unauthorized(res, 'Invalid token');
+        }
+        return response.error(res, error.message);
+    }
+};
+
+// Update FAQ
+const updateFaq = async (req, res) => {
+    try {
+        // Validate request body
+        const { error, value } = updateFaqSchema.validate(req.body);
+        if (error) {
+            return response.validationError(res, error.details[0].message.replace(/"/g, ''));
+        }
+
+        const { token, faq_id, faq_question, faq_answer} = value;
+
+        // Verify admin token and get admin_id from token
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const admin_id = decoded.id;
+
+        // Verify admin token
+        const isTokenValid = await faqService.verifyAdminToken(admin_id, token);
+        if (!isTokenValid) {
+            return response.unauthorized(res, 'Invalid or expired token');
+        }
+
+        const updatedFaqId = await faqService.updateFaq(faq_id, { 
+            question: faq_question, 
+            answer: faq_answer 
+        });
+        return response.success(res, { id: updatedFaqId, faq_question, faq_answer }, 'FAQ updated successfully');
+    } catch (error) {
+        console.error('Error in updateFaq:', error);
+        if (error.name === 'JsonWebTokenError') {
+            return response.unauthorized(res, 'Invalid token');
+        }
+        return response.error(res, error.message);
+    }
+};
+
+// Delete FAQ
+const deleteFaq = async (req, res) => {
+    try {
+        // Validate request body
+        const { error, value } = deleteFaqSchema.validate(req.body);
+        if (error) {
+            return response.validationError(res, error.details[0].message.replace(/"/g, ''));
+        }
+
+        const { token, faq_id } = value;
+
+        // Verify admin token and get admin_id from token
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const admin_id = decoded.id;
+
+        // Verify admin token
+        const isTokenValid = await faqService.verifyAdminToken(admin_id, token);
+        if (!isTokenValid) {
+            return response.unauthorized(res, 'Invalid or expired token');
+        }
+
+        const deletedFaqId = await faqService.deleteFaq(faq_id);
+        return response.success(res, { id: deletedFaqId }, 'FAQ deleted successfully');
+    } catch (error) {
+        console.error('Error in deleteFaq:', error);
+        if (error.name === 'JsonWebTokenError') {
+            return response.unauthorized(res, 'Invalid token');
+        }
+        return response.error(res, error.message);
     }
 };
 
 module.exports = {
+    getFaqList,
     createFaq,
-    getFaqList
+    updateFaq,
+    deleteFaq
 }; 

@@ -43,9 +43,15 @@ const authService = {
     // Update session end time
     updateSessionEnd: async (adminId, token) => {
         try {
+            // const query = `
+            //     UPDATE tbl_admin_session_details 
+            //     SET session_end = DATE_ADD(NOW(), INTERVAL 15 MINUTE)
+            //     WHERE admin_id = ? AND token = ?
+            // `;
+
             const query = `
                 UPDATE tbl_admin_session_details 
-                SET session_end = DATE_ADD(NOW(), INTERVAL 15 MINUTE)
+                SET session_end = DATE_ADD(NOW(), INTERVAL 10 HOUR)
                 WHERE admin_id = ? AND token = ?
             `;
             await pool.execute(query, [adminId, token]);
@@ -65,10 +71,11 @@ const authService = {
             // First verify the token is valid and get the payload
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
             console.log('Decoded token:', decoded.id);
-            console.log("adminId",adminId);
+            console.log("adminId", adminId);
             
             // Check if the token payload matches the admin_id
             if (decoded.id != adminId) {
+                console.log('Token admin_id mismatch');
                 return false;
             }
 
@@ -81,14 +88,20 @@ const authService = {
             const [rows] = await pool.execute(query, [adminId, token]);
             
             if (rows.length > 0) {
+                console.log('Token verified successfully');
                 // Update session end time to current time + 15 minutes
                 await authService.updateSessionEnd(adminId, token);
                 return true;
             }
             
+            console.log('Token session expired');
             return false;
         } catch (error) {
-            console.error('Error verifying admin token:', error);
+            console.error('Error verifying admin token:', {
+                message: error.message,
+                stack: error.stack,
+                adminId
+            });
             return false;
         }
     }
