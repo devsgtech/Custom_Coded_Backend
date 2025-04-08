@@ -16,6 +16,15 @@ const PORT = process.env.SERVER_PORT || 5000;
 app.use(cors());
 app.use(bodyParser.json());
 
+// Add request logging middleware
+app.use((req, res, next) => {
+    console.log(`${req.method} ${req.url}`, {
+        body: req.body,
+        headers: req.headers
+    });
+    next();
+});
+
 // Routes
 app.use("/api/users", userRoutes);
 app.use("/api/admin", adminRoutes);
