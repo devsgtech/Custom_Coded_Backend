@@ -19,6 +19,16 @@ const createFaqSchema = Joi.object({
     faq_data: faqDataSchema
 });
 
+const createCategotySchema = Joi.object({
+    token: Joi.string().required(),
+    category_data: Joi.object({
+        category_name: Joi.string().required(),
+        total_count: Joi.number().required(),
+        available_count: Joi.number().required(),
+        category_amount: Joi.number().required(),
+      }).required()
+});
+
 const updateFaqSchema = Joi.object({
     token: Joi.string().required(),
     faq_id: Joi.number().required(),
@@ -36,5 +46,6 @@ module.exports = {
     faqDataSchema,
     createFaqSchema,
     updateFaqSchema,
-    deleteFaqSchema
+    deleteFaqSchema,
+    createCategotySchema
 };
