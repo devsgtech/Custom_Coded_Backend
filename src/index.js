@@ -6,6 +6,7 @@ const userRoutes = require("./routes/userRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const contactRoutes = require("./routes/contactRoutes");
 const faqRoutes = require("./routes/faqRoutes");
+const categoryRoutes = require("./routes/categoryRoutes");
 const pool = require("./config/database");
 
 dotenv.config();
@@ -30,6 +31,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/contact", contactRoutes);
 app.use("/api/faq", faqRoutes);
+app.use("/api/categoty", categoryRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
