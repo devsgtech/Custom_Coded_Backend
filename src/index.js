@@ -7,6 +7,7 @@ const adminRoutes = require("./routes/adminRoutes");
 const contactRoutes = require("./routes/contactRoutes");
 const faqRoutes = require("./routes/faqRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
+const metaRoutes = require("./routes/metaRoutes");
 const pool = require("./config/database");
 
 dotenv.config();
@@ -32,6 +33,9 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/contact", contactRoutes);
 app.use("/api/faq", faqRoutes);
 app.use("/api/categoty", categoryRoutes);
+app.use("/api/meta", metaRoutes);
+app.use('/images', express.static('public/images'));
+app.use('/videos', express.static('public/videos'));
 
 // Error handling middleware
 app.use((err, req, res, next) => {
