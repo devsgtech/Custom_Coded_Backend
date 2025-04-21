@@ -2,7 +2,6 @@ const contactService = require('../services/contactService');
 const response = require('../utils/response');
 const { greetingSchema } = require('../middleware/Validation');
 const axios = require('axios');
-const { CAPTCHA_SECRET_KEY } = require('../config/constants');// Google reCAPTCHA secret key
 
 const submitContact = async (req, res) => {
     try {
@@ -18,7 +17,7 @@ const submitContact = async (req, res) => {
         const verifyUrl = 'https://www.google.com/recaptcha/api/siteverify';
         const captchaResponse = await axios.post(verifyUrl, null, {
             params: {
-                secret: CAPTCHA_SECRET_KEY,
+                secret: process.env.CAPTCHA_SECRET_KEY,
                 response: contact_captcha_token,
                 remoteip: contact_ip // optional
             }
