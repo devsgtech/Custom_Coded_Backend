@@ -1,5 +1,4 @@
 const pool = require('../config/database');
-const { createCategory } = require('../controllers/categoryController');
 const authService = require('./authService');
 
 const categoryService = {
