@@ -2,12 +2,13 @@ const faqService = require('../services/faqService');
 const response = require('../utils/response');
 const jwt = require('jsonwebtoken');
 const { createFaqSchema,updateFaqSchema,deleteFaqSchema } = require('../middleware/Validation');
+const { ERROR_MESSAGES } = require('../config/constants')
 
 // Get all FAQs
 const getFaqList = async (req, res) => {
     try {
         const faqs = await faqService.getAllFaqs();
-        return response.success(res, faqs, 'FAQs fetched successfully');
+        return response.success(res, faqs, ERROR_MESSAGES.FAQ_FETCH_SUCCESS);
     } catch (error) {
         console.error('Error in getFaqList:', error);
         return response.error(res, error.message);
@@ -32,7 +33,7 @@ const createFaq = async (req, res) => {
         // Verify admin token
         const isTokenValid = await faqService.verifyAdminToken(admin_id, token);
         if (!isTokenValid) {
-            return response.unauthorized(res, 'Invalid or expired token');
+            return response.unauthorized(res, ERROR_MESSAGES.INVALID_OR_EXPIRE_TOKEN);
         }
 
         const faqId = await faqService.createFaq({ 
@@ -40,11 +41,11 @@ const createFaq = async (req, res) => {
             answer: faq_data.faq_answer,
             admin_id: admin_id
         });
-        return response.success(res, { id: faqId, ...faq_data }, 'FAQ created successfully');
+        return response.success(res, { id: faqId, ...faq_data }, ERROR_MESSAGES.FAQ_SUCCESS);
     } catch (error) {
         console.error('Error in createFaq:', error);
         if (error.name === 'JsonWebTokenError') {
-            return response.unauthorized(res, 'Invalid token');
+            return response.unauthorized(res, ERROR_MESSAGES.INVALID_TOKEN);
         }
         return response.error(res, error.message);
     }
@@ -68,18 +69,18 @@ const updateFaq = async (req, res) => {
         // Verify admin token
         const isTokenValid = await faqService.verifyAdminToken(admin_id, token);
         if (!isTokenValid) {
-            return response.unauthorized(res, 'Invalid or expired token');
+            return response.unauthorized(res, ERROR_MESSAGES.INVALID_OR_EXPIRE_TOKEN);
         }
 
         const updatedFaqId = await faqService.updateFaq(faq_id, { 
             question: faq_question, 
             answer: faq_answer 
         });
-        return response.success(res, { id: updatedFaqId, faq_question, faq_answer }, 'FAQ updated successfully');
+        return response.success(res, { id: updatedFaqId, faq_question, faq_answer }, ERROR_MESSAGES.FAQ_UPDATE_SUCCESS);
     } catch (error) {
         console.error('Error in updateFaq:', error);
         if (error.name === 'JsonWebTokenError') {
-            return response.unauthorized(res, 'Invalid token');
+            return response.unauthorized(res, ERROR_MESSAGES.INVALID_TOKEN);
         }
         return response.error(res, error.message);
     }
@@ -103,15 +104,15 @@ const deleteFaq = async (req, res) => {
         // Verify admin token
         const isTokenValid = await faqService.verifyAdminToken(admin_id, token);
         if (!isTokenValid) {
-            return response.unauthorized(res, 'Invalid or expired token');
+            return response.unauthorized(res, ERROR_MESSAGES.INVALID_OR_EXPIRE_TOKEN);
         }
 
         const deletedFaqId = await faqService.deleteFaq(faq_id);
-        return response.success(res, { id: deletedFaqId }, 'FAQ deleted successfully');
+        return response.success(res, { id: deletedFaqId }, ERROR_MESSAGES.FAQ_DELETE_SUCCESS);
     } catch (error) {
         console.error('Error in deleteFaq:', error);
         if (error.name === 'JsonWebTokenError') {
-            return response.unauthorized(res, 'Invalid token');
+            return response.unauthorized(res, ERROR_MESSAGES.INVALID_TOKEN);
         }
         return response.error(res, error.message);
     }

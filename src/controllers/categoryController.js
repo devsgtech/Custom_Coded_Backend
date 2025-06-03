@@ -2,7 +2,7 @@ const categoryService = require('../services/categoryService');
 const response = require('../utils/response');
 const jwt = require('jsonwebtoken');
 const { createCategotySchema } = require('../middleware/Validation');
-
+const { ERROR_MESSAGES } = require('../config/constants')
 
 
 const getCategory = async (req, res) => {
@@ -39,7 +39,7 @@ const getCategory = async (req, res) => {
             };
         });
 
-        return response.success(res, parsedCategories, 'Categories fetched successfully');
+        return response.success(res, parsedCategories, ERROR_MESSAGES.CATEGORY_SUCCESS);
     } catch (error) {
         console.error('Error in getCategory:', error);
         return response.error(res, error.message);
@@ -73,7 +73,7 @@ const createCategory = async (req, res) => {
         // Verify admin token
         const isTokenValid = await categoryService.verifyAdminToken(admin_id, token);
         if (!isTokenValid) {
-            return response.unauthorized(res, 'Invalid or expired token');
+            return response.unauthorized(res, ERROR_MESSAGES.INVALID_OR_EXPIRE_TOKEN);
         }
 
         const categoryId = await categoryService.createCategory({ 
@@ -83,11 +83,11 @@ const createCategory = async (req, res) => {
             category_amount: category_data.category_amount,
             created_by: admin_id
         });
-        return response.success(res, { id: categoryId, ...category_data }, 'Category created successfully');
+        return response.success(res, { id: categoryId, ...category_data }, ERROR_MESSAGES.CREATE_CATEGORY_SUCCESS);
     } catch (error) {
         console.error('Error in createCategory:', error);
         if (error.name === 'JsonWebTokenError') {
-            return response.unauthorized(res, 'Invalid token');
+            return response.unauthorized(res, ERROR_MESSAGES.INVALID_TOKEN);
         }
         return response.error(res, error.message);
     }

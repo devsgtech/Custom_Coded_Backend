@@ -24,6 +24,13 @@ const createmetaSchema = Joi.object({
       }).required()
 });
 
+const createcodeidSchema = Joi.object({
+    token: Joi.string().required(),
+    code_data: Joi.object({
+        category_id: Joi.string().required()
+      }).required()
+});
+
 const createFaqSchema = Joi.object({
     token: Joi.string().required(),
     faq_data: faqDataSchema
@@ -52,7 +59,30 @@ const deleteFaqSchema = Joi.object({
 });
 
 const getmetaSchema = Joi.object({
-    meta_group: Joi.string().required()
+    meta_group: Joi.string().required(),
+    ip_address: Joi.string().required()
+});
+
+const UserLoginSchema = Joi.object({
+    generated_code_id: Joi.string().length(10).required().messages({
+        'any.required': 'Code ID is required',
+        'string.length': 'Code must be exactly 10 characters long'
+    }),
+    generated_code: Joi.string().length(10).required().messages({
+        'any.required': 'Code is required',
+        'string.length': 'Code must be exactly 10 characters long'
+    }),
+    session_timezone: Joi.string().required(),
+    session_ip: Joi.string().required(),
+    session_country: Joi.string().required()
+});
+
+const uploadVideoSchema = Joi.object({
+    code_id: Joi.number().required().messages({
+        'any.required': 'Code ID is required',
+        'number.base': 'Code ID must be a number'
+    }),
+    token: Joi.string().required()
 });
 
 module.exports = { 
@@ -63,5 +93,8 @@ module.exports = {
     deleteFaqSchema,
     createCategotySchema,
     createmetaSchema,
-    getmetaSchema
+    getmetaSchema,
+    createcodeidSchema,
+    UserLoginSchema,
+    uploadVideoSchema
 };
