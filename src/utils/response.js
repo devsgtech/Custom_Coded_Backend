@@ -38,11 +38,12 @@ const response = {
         });
     },
 
-    unauthorized: (res, message = 'Unauthorized') => {
+    unauthorized: (res, message = 'Unauthorized',data=null) => {
         return res.status(401).json({
             status: false,
             statusCode: 401,
             message: message,
+            data: data,
             timestamp: new Date().toISOString()
         });
     },

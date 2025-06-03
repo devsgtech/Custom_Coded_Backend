@@ -1,37 +1,54 @@
-const pool = require('../config/database');
+'use strict';
+const { Model } = require('sequelize');
 
-class UserModel {
-    static async createUser(userData) {
-        const { username, email, password } = userData;
-        const query = 'INSERT INTO users (username, email, password) VALUES (?, ?, ?)';
-        const [result] = await pool.query(query, [username, email, password]);
-        return result.insertId;
+module.exports = (sequelize, DataTypes) => {
+  class User extends Model {
+    static associate(models) {
+      // define associations here if needed
     }
-
-    static async findByEmail(email) {
-        const query = 'SELECT * FROM users WHERE email = ?';
-        const [rows] = await pool.query(query, [email]);
-        return rows[0];
+  }
+  
+  User.init({
+    id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+      allowNull: false
+    },
+    username: {
+      type: DataTypes.STRING,
+      allowNull: false
+    },
+    email: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      unique: true,
+      validate: {
+        isEmail: true
+      }
+    },
+    password: {
+      type: DataTypes.STRING,
+      allowNull: false
+    },
+    created_at: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: DataTypes.NOW
+    },
+    updated_at: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: DataTypes.NOW
     }
+  }, {
+    sequelize,
+    modelName: 'User',
+    tableName: 'users',
+    timestamps: true,
+    createdAt: 'created_at',
+    updatedAt: 'updated_at'
+  });
 
-    static async findById(id) {
-        const query = 'SELECT * FROM users WHERE id = ?';
-        const [rows] = await pool.query(query, [id]);
-        return rows[0];
-    }
-
-    static async updateUser(id, userData) {
-        const { username, email } = userData;
-        const query = 'UPDATE users SET username = ?, email = ? WHERE id = ?';
-        const [result] = await pool.query(query, [username, email, id]);
-        return result.affectedRows > 0;
-    }
-
-    static async deleteUser(id) {
-        const query = 'DELETE FROM users WHERE id = ?';
-        const [result] = await pool.query(query, [id]);
-        return result.affectedRows > 0;
-    }
-}
-
-module.exports = UserModel; 
+  return User;
+}; 

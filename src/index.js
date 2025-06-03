@@ -8,6 +8,8 @@ const contactRoutes = require("./routes/contactRoutes");
 const faqRoutes = require("./routes/faqRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
 const metaRoutes = require("./routes/metaRoutes");
+const codeidRoutes = require("./routes/codeIDRoutes");
+const uploadRoutes = require("./routes/uploadRoutes");
 const pool = require("./config/database");
 
 dotenv.config();
@@ -28,12 +30,14 @@ app.use((req, res, next) => {
 });
 
 // Routes
-app.use("/api/users", userRoutes);
+app.use("/api/user", userRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/contact", contactRoutes);
 app.use("/api/faq", faqRoutes);
 app.use("/api/categoty", categoryRoutes);
 app.use("/api/meta", metaRoutes);
+app.use("/api/codeid", codeidRoutes);
+app.use("/api/upload", uploadRoutes);
 app.use('/images', express.static('public/images'));
 app.use('/videos', express.static('public/videos'));
 
