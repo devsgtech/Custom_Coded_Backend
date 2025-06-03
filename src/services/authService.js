@@ -1,7 +1,9 @@
 const jwt = require('jsonwebtoken');
 const pool = require('../config/database');
+const { SessionTime } = require("../config/constants")
 
 const authService = {
+    // ---------------------------------------- ADMIN ------------------------------------
     // Generate JWT token
     generateToken: (admin) => {
         try {
@@ -12,19 +14,19 @@ const authService = {
                     name: admin.name
                 },
                 process.env.JWT_SECRET,
-                { expiresIn: '24h' } // Set a longer expiry since we'll handle inactivity separately
+                { expiresIn: SessionTime.ADMIN_JWT_TOKEN_EXPIRE_TIME } // Set a longer expiry since we'll handle inactivity separately
             );
             return token;
         } catch (error) {
-            console.error('Error generating token:', error);
-            throw new Error('Token generation failed');
+            console.error('Error generating admin token:', error);
+            throw new Error('Admin token generation failed');
         }
     },
 
     // Get token expiry date (24 hours from now)
     getTokenExpiry: () => {
         const expiry = new Date();
-        expiry.setHours(expiry.getHours() + 24);
+        expiry.setHours(expiry.getHours() + SessionTime.ADMIN_TOKEN_EXPIRY_TIME);
         return expiry;
     },
 
@@ -104,7 +106,33 @@ const authService = {
             });
             return false;
         }
-    }
+    },
+
+// ---------------------------------------- USER ------------------------------------
+    // Generate User JWT token
+    generateUserTokenAuth: (user) => {
+        try {
+            const token = jwt.sign(
+                { 
+                    code_id: user.code_id,
+                    generated_code_id: user.generated_code_id,
+                },
+                process.env.JWT_SECRET,
+                { expiresIn: SessionTime.USER_JWT_TOKEN_EXPIRE_TIME } // Set a longer expiry since we'll handle inactivity separately
+            );
+            return token;
+        } catch (error) {
+            console.error('Error generating User token:', error);
+            throw new Error('User token generation failed');
+        }
+    },
+
+    // Get token expiry date (24 hours from now)
+    getUserTokenExpiryAuth: () => {
+        const expiry = new Date();
+        expiry.setHours(expiry.getHours() + SessionTime.USER_TOKEN_EXPIRY_TIME);
+        return expiry;
+    },
 };
 
 module.exports = authService; 

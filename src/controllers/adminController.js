@@ -1,6 +1,7 @@
 const adminService = require('../services/adminService');
 const { adminLoginSchema } = require('../middleware/adminValidation');
 const response = require('../utils/response');
+const { ERROR_MESSAGES } = require('../config/constants')
 
 const login = async (req, res) => {
     // const { email, password } = req.body;
@@ -32,13 +33,13 @@ const login = async (req, res) => {
         // Get admin from database
         const admin = await adminService.findAdminByEmail(email);
         if (!admin) {
-            return response.unauthorized(res, 'Invalid email or password 3');
+            return response.unauthorized(res, ERROR_MESSAGES.INVALID_EMAIL_OR_PASSWORD);
         }
 
         // Verify password
         const isValidPassword = await adminService.verifyPassword(password, admin.password);
         if (!isValidPassword) {
-            return response.unauthorized(res, 'Invalid email or password 4');
+            return response.unauthorized(res, ERROR_MESSAGES.INVALID_EMAIL_OR_PASSWORD);
         }
 
         // Generate JWT token and get expiry
@@ -61,7 +62,7 @@ const login = async (req, res) => {
                 name: admin.name,
                 email: admin.email
             }
-        }, 'Login successful');
+        }, ERROR_MESSAGES.LOGIN_SUCCESS);
 
     } catch (error) {
         console.error('Login error:', error);
