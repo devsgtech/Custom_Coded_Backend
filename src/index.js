@@ -39,7 +39,9 @@ app.use("/api/meta", metaRoutes);
 app.use("/api/codeid", codeidRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use('/images', express.static('public/images'));
+app.use('/finalvideo_2', express.static('public/finalvideo_2'));
 app.use('/videos', express.static('public/videos'));
+app.use('/videos/attachements', express.static('public/videos/attachements'));
 
 // Error handling middleware
 app.use((err, req, res, next) => {

@@ -78,11 +78,16 @@ const UserLoginSchema = Joi.object({
 });
 
 const uploadVideoSchema = Joi.object({
-    code_id: Joi.number().required().messages({
-        'any.required': 'Code ID is required',
-        'number.base': 'Code ID must be a number'
+    code_id: Joi.string().required().messages({
+        'any.required': 'Code ID is required'
     }),
-    token: Joi.string().required()
+    token: Joi.string().required(),
+    template: Joi.string().required().messages({
+        'any.required': 'Template is required'
+    }),
+    text: Joi.string().required().messages({
+        'any.required': 'Text is required'
+    })
 });
 
 module.exports = { 
