@@ -20,7 +20,8 @@ const createmetaSchema = Joi.object({
     meta_data: Joi.object({
         meta_key: Joi.string().required(),
         meta_value: Joi.string().required(),
-        meta_group: Joi.string().required()
+        meta_group: Joi.string().required(),
+        meta_remarks: Joi.string(), // Optional field for remarks
       }).required()
 });
 
@@ -82,12 +83,24 @@ const uploadVideoSchema = Joi.object({
         'any.required': 'Code ID is required'
     }),
     token: Joi.string().required(),
-    template: Joi.string().required().messages({
-        'any.required': 'Template is required'
-    }),
     text: Joi.string().required().messages({
         'any.required': 'Text is required'
-    })
+    }),
+    background_asset_id: Joi.string().required().messages({
+        'any.required': 'Background id is required'
+    }),
+    overlay_asset_id: Joi.string().required().messages({
+        'any.required': 'Overlay id is required'
+    }),
+    font_color_asset_id:Joi.string().required().messages({
+        'any.required': 'Font color id is required'
+    }),
+    font_type_asset_id:Joi.string().required().messages({
+        'any.required': 'Font type id is required'
+    }),
+    text_alignment:Joi.string().required().messages({
+        'any.required': 'Text Alignment is required'
+    }),
 });
 
 module.exports = { 

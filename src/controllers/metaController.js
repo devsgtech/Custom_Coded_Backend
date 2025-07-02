@@ -4,6 +4,8 @@ const jwt = require('jsonwebtoken');
 const { createmetaSchema, getmetaSchema } = require('../middleware/Validation');
 const { BASE_URL_LIVE, ERROR_MESSAGES } = require('../config/constants');
 const ipBanService = require('../services/ipBanService');
+const fs = require('fs');
+const path = require('path');
 
 // Get all Metas
 const getmetaList = async (req, res) => {
@@ -36,7 +38,6 @@ const getmetaList = async (req, res) => {
                             .map(path => `${path.trim()}`)
                     };
                 }
-
                 if (item.meta_key === "page_logo_preview" || item.meta_key === "page_background_image_preview" || 
                     item.meta_key === "video_preview" || item.meta_key === "favicon_website_info" || 
                     item.meta_key === "logo_website_info" || item.meta_key === "backgroundVideo_home" ||
@@ -94,6 +95,7 @@ const createmeta = async (req, res) => {
             meta_key: meta_data.meta_key, 
             meta_value: meta_data.meta_value,
             meta_group: meta_data.meta_group,
+            meta_remarks: meta_data.meta_remarks ? meta_data.meta_remarks : null,
             is_delete: 0,
             admin_id: admin_id
         });
@@ -107,8 +109,73 @@ const createmeta = async (req, res) => {
     }
 };
 
+const getTemplatesList = async (req, res) => {
+    try {
+        // --- Fetch color list from metaService ---
+        let color_list = [];
+        let background_list = [];
+        let overlay_list = [];
+        let template_list = [];
+        let font_type_list = [];
+        try {
+            const metas = await metaService.getAllMetas("9,10,11,12,13");
+            if (metas.success && Array.isArray(metas.data)) {
+                color_list = metas.data.filter(item => item.meta_key === 'font_color').map(item => ({
+                        id: item.meta_id,
+                        type: item.meta_key,
+                        color_code: item.meta_value,
+                        name: item.remarks || ''
+                    }));
+                background_list = metas.data.filter(item => item.meta_key === 'background_video_path').map(item => ({
+                        id: item.meta_id,
+                        type: item.meta_key,
+                        path: `${BASE_URL_LIVE}${item.meta_value.trim()}`,
+                        name: item.remarks || ''
+                    }));
+                overlay_list = metas.data.filter(item => item.meta_key === 'overlay_video_path').map(item => ({
+                    id: item.meta_id,
+                    type: item.meta_key,
+                    path: `${BASE_URL_LIVE}${item.meta_value.trim()}`,
+                    name: item.remarks || ''
+                }));
+                template_list = metas.data.filter(item => item.meta_key === 'template').map(item => ({
+                    id: item.meta_id,
+                    type: item.meta_key,
+                    path: `${BASE_URL_LIVE}${item.meta_value.trim()}`,
+                    name: item.remarks || ''
+                }));
+                font_type_list = metas.data.filter(item => item.meta_key === 'font_type').map(item => ({
+                    id: item.meta_id,
+                    type: item.meta_key,
+                    path: `${BASE_URL_LIVE}${item.meta_value.trim()}`,
+                    name: item.remarks || ''
+                }));
+            }
+        } catch (metaError) {
+            console.error('Error fetching color list:', metaError);
+        }
+        // --- End color list logic ---
+
+        return res.json({
+            status: true,
+            color_list,
+            background_list,
+            overlay_list,
+            template_list,
+            font_type_list
+        });
+    } catch (error) {
+        console.error('Error in getTemplatesList:', error);
+        return res.status(500).json({
+            status: false,
+            message: 'Failed to fetch templates',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     getmetaList,
-    createmeta
-    
+    createmeta,
+    getTemplatesList
 }; 
