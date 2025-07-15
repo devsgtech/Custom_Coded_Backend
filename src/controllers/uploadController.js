@@ -2,7 +2,7 @@ const uploadService = require('../services/uploadService');
 const metaService = require('../services/metaService');
 const response = require('../utils/response');
 const jwtUtils = require('../utils/jwtUtils');
-const { uploadVideoSchema } = require('../middleware/Validation');
+const { uploadVideoSchema, checkVideoStatusSchema } = require('../middleware/Validation');
 const { ERROR_MESSAGES, BASE_URL_LIVE } = require('../config/constants');
 const path = require('path');
 const fs = require('fs');
@@ -14,18 +14,20 @@ const execAsync = util.promisify(exec);
 const uploadVideo = async (req, res) => {
     try {
         // Validate request body
+        console.log("req.body",req.body);
         const { error, value } = uploadVideoSchema.validate(req.body);
         if (error) {
             return response.validationError(res, error.details[0].message.replace(/"/g, ''));
         }
 
-        const { token, code_id, text ,background_asset_id, overlay_asset_id, font_color_asset_id, font_type_asset_id, text_alignment } = value;
+        const { token, code_id, text, background_asset_id, overlay_asset_id, font_color_asset_id, font_type_asset_id, upload_path_id, text_alignment } = value;
+        console.log("upload_path_id", upload_path_id);
         let text_align = "";
-        if(text_alignment == "right"){
+        if (text_alignment == "right") {
             text_align = 'w-text_w-10';
-        }else if(text_alignment == "left"){
+        } else if (text_alignment == "left") {
             text_align = '10';
-        }else{
+        } else {
             text_align = '(w-text_w)/2';
         }
         const metas1 = await metaService.getMetaDetails(background_asset_id);
@@ -39,53 +41,23 @@ const uploadVideo = async (req, res) => {
         // Verify user token and get user_id from token FIRST
         const decoded = jwtUtils.verifyTokenAndRespond(res, token, process.env.JWT_SECRET);
         if (!decoded) {
-            // Delete the uploaded file since token is invalid
-            if (req.file && req.file.path) {
-                try {
-                    fs.unlinkSync(req.file.path);
-                    console.log('Deleted uploaded file due to invalid token:', req.file.filename);
-                } catch (deleteError) {
-                    console.error('Error deleting file:', deleteError);
-                }
-            }
             return; // Response already sent by verifyTokenAndRespond
         }
-        
         const user_id = decoded;
-        
-        console.log("generated_code_id",user_id.generated_code_id)
-        
-        // Check if code_id matches the generated_code_id from token
         if (code_id !== user_id.generated_code_id) {
-            // Delete the uploaded file since code_id is invalid
-            if (req.file && req.file.path) {
-                try {
-                    fs.unlinkSync(req.file.path);
-                    console.log('Deleted uploaded file due to invalid code_id:', req.file.filename);
-                } catch (deleteError) {
-                    console.error('Error deleting file:', deleteError);
-                }
-            }
             return response.unauthorized(res, "Invalid Code Id");
         }
 
         // Check if a video already exists for this code_id and delete it BEFORE processing new file
         const existingAttachments = await uploadService.getAttachmentsByCodeId(code_id);
         if (existingAttachments.success && existingAttachments.data && existingAttachments.data.length > 0) {
-            console.log('Found existing videos for code_id:', code_id, 'Deleting old files and updating database...');
-            
-            // Delete the previous video files from server
             for (const attachment of existingAttachments.data) {
                 try {
-                    // Use the correct path including 'public' directory
-                    const videoPath = path.join(__dirname, '..', '..', 'public', attachment.uploded_video_path);
-                    console.log('Attempting to delete video file at:', videoPath);
-                    
-                    if (fs.existsSync(videoPath)) {
-                        fs.unlinkSync(videoPath);
-                        console.log('Successfully deleted previous video file:', attachment.uploded_video_path);
-                    } else {
-                        console.log('Video file not found at path:', videoPath);
+                    if (attachment.uploded_video_path) { // Only if path is not null/empty
+                        const videoPath = path.join(__dirname, '..', '..', 'public', attachment.uploded_video_path);
+                        if (fs.existsSync(videoPath)) {
+                            fs.unlinkSync(videoPath);
+                        }
                     }
                 } catch (deleteError) {
                     console.error('Error deleting previous video file:', deleteError);
@@ -93,126 +65,94 @@ const uploadVideo = async (req, res) => {
             }
         }
 
-        // Now check if new file was uploaded
-        if (!req.file) {
-            return response.validationError(res, 'No video file uploaded');
-        }
-
-        // Check video file size (200MB = 200 * 1024 * 1024 bytes)
-        const maxSizeInBytes = 200 * 1024 * 1024; // 200MB
-        if (req.file.size > maxSizeInBytes) {
-            // Delete the uploaded file since it's too large
-            try {
-                fs.unlinkSync(req.file.path);
-                console.log('Deleted uploaded file due to size limit:', req.file.filename);
-            } catch (deleteError) {
-                console.error('Error deleting oversized file:', deleteError);
-            }
-            return response.validationError(res, 'Video size exceeds 200MB limit');
-        }
-        
-        // Create relative path for database storage
-        const relativePath = path.join('videos/attachements', req.file.filename).replace(/\\/g, '/');
-        console.log("$$$$$",relativePath)
-
-        // Process video with FFmpeg using dynamic template and text
+        // 1. Find all chunk files in the upload_path_id directory
         const projectRoot = path.join(__dirname, '..', '..');
-        const backgroundPath = path.join(projectRoot, `public${fetched_background_asset_path}`);
-        const fontPath = path.join(projectRoot, `public/fonts/${fetched_font_type_asset_path}`);
-        const iconPath = path.join(projectRoot, `public/backend_overlay${fetched_overlay_asset_path}`);
-        const userVideoPath = path.join(projectRoot, 'public', relativePath);
-        const finalVideoPath = path.join(projectRoot, 'public/finalvideo_2', `${code_id}_${Date.now()}.mp4`);
-
-        // Ensure finalvideo_2 directory exists
-        const finalVideoDir = path.dirname(finalVideoPath);
-        if (!fs.existsSync(finalVideoDir)) {
-            fs.mkdirSync(finalVideoDir, { recursive: true });
+        const chunksDir = path.join(projectRoot, 'public', 'videos', 'attachements', upload_path_id);
+        if (!fs.existsSync(chunksDir)) {
+            return response.validationError(res, `No chunks found for upload_path_id: ${upload_path_id}`);
+        }
+        let chunkFiles = fs.readdirSync(chunksDir)
+            .filter(f => f.startsWith('chunk_'))
+            .map(f => ({
+                name: f,
+                number: parseInt(f.match(/chunk_(\d+)/)?.[1] || '0', 10)
+            }))
+            .sort((a, b) => a.number - b.number)
+            .map(f => f.name);
+        if (chunkFiles.length === 0) {
+            return response.validationError(res, `No chunk files found in ${chunksDir}`);
         }
 
-        // FFmpeg command with dynamic text overlay
-        const ffmpegCommandd = `ffmpeg -i "${backgroundPath}" -i "${userVideoPath}" -i "${iconPath}" -filter_complex "[1:v][0:v] scale2ref=w=iw*0.7:h=ih*0.55 [user_scaled][bg]; [bg][user_scaled] overlay=x='main_w*0.15':y='main_h*0.05' [tmp]; [tmp][2:v] overlay=10:10 [video_with_icons]; [video_with_icons] drawtext=text='${text}':fontcolor=white:fontsize=16:x=main_w*0.02 + (main_w*0.96 - text_w)/2:y=main_h*0.6 + main_h*0.15:box=1:boxcolor=black@0.5:boxborderw=5:line_spacing=4:enable='gte(t,0)'" -map "0:a?" -c:a copy -c:v libx264 -pix_fmt yuv420p "${finalVideoPath}"`;
-        const ffmpegCommand = `ffmpeg -i "${userVideoPath}" -stream_loop -1 -i "${backgroundPath}" -stream_loop -1 -i "${iconPath}" -filter_complex " [0:v]setpts=PTS-STARTPTS, scale=w='if(lt(a,0.75),min(iw,720))':h='if(lt(a,0.75),min(ih,1280))':force_original_aspect_ratio=decrease[user_scaled]; [1:v]setpts=PTS-STARTPTS[bg]; [2:v]setpts=PTS-STARTPTS[icon]; [bg][user_scaled]overlay=x=(W-w)/2:y=80[tmp1]; [tmp1][icon]overlay=10:10[tmp2]; [tmp2]drawtext=fontfile='${fontPath}':text='${text}':fontcolor='${fetched_font_color_asset_path}':fontsize=26:x='${text_align}':y=h*0.76:box=1:boxcolor=black@0.5:boxborderw=5:line_spacing=4:enable='gte(t,0)'[final]" -map "[final]" -map "0:a?" -t "$(ffprobe -v error -select_streams v:0 -show_entries stream=duration -of default=nw=1:nk=1 "${userVideoPath}")" -c:v libx264 -pix_fmt yuv420p -c:a copy "${finalVideoPath}"`;
+        // Clear the video path in DB before starting processing
+        await uploadService.updateAttachmentByCodeId(code_id, { uploded_video_path: null });
 
-        console.log('Executing FFmpeg command:', ffmpegCommand);
-
-        try {
-            const { stdout, stderr } = await execAsync(ffmpegCommand);
-            console.log('FFmpeg stdout:', stdout);
-            if (stderr) {
-                console.log('FFmpeg stderr:', stderr);
-            }
-            console.log('FFmpeg processing completed successfully');
-        } catch (ffmpegError) {
-            console.error('FFmpeg processing failed:', ffmpegError);
-            // Delete the uploaded file if FFmpeg fails
+        // Start video processing in the background
+        (async () => {
             try {
-                fs.unlinkSync(req.file.path);
-                console.log('Deleted uploaded file due to FFmpeg error:', req.file.filename);
-            } catch (deleteError) {
-                console.error('Error deleting file after FFmpeg error:', deleteError);
-            }
-            return response.error(res, 'Video processing failed');
-        }
-
-        // Create attachment record with final video path
-        const finalVideoRelativePath = path.relative(path.join(projectRoot, 'public'), finalVideoPath).replace(/\\/g, '/');
-        
-        let result;
-        if (existingAttachments.success && existingAttachments.data && existingAttachments.data.length > 0) {
-            // Update existing record
-            result = await uploadService.updateAttachmentByCodeId(code_id, {
-                uploded_video_path: finalVideoRelativePath
-            });
-        } else {
-            // Create new record
-            result = await uploadService.createAttachment({
-                uploded_video_path: finalVideoRelativePath,
-                code_id: code_id
-            });
-        }
-
-        if (!result.success) {
-            // Delete both uploaded and final files if database operation fails
-            try {
-                fs.unlinkSync(req.file.path);
-                if (fs.existsSync(finalVideoPath)) {
-                    fs.unlinkSync(finalVideoPath);
+                // Log the chunk files to be merged
+                console.log('Chunk files to merge:', chunkFiles);
+                // 2. Concatenate chunks into a single file (binary merge)
+                const mergedFilename = `merged_${code_id}_${Date.now()}` + path.extname(chunkFiles[0]);
+                const mergedFilePath = path.join(chunksDir, mergedFilename);
+                const writeStream = fs.createWriteStream(mergedFilePath);
+                for (const chunkFile of chunkFiles) {
+                    const chunkPath = path.join(chunksDir, chunkFile);
+                    console.log('Merging chunk:', chunkPath);
+                    const data = fs.readFileSync(chunkPath);
+                    writeStream.write(data);
                 }
-                console.log('Deleted files due to database error');
-            } catch (deleteError) {
-                console.error('Error deleting files:', deleteError);
-            }
-            return response.error(res, result.error);
-        }
+                writeStream.end();
+                // Wait for the stream to finish
+                await new Promise((resolve, reject) => {
+                    writeStream.on('finish', resolve);
+                    writeStream.on('error', reject);
+                });
 
-        // Delete the uploaded video file from attachments folder after successful processing
-        try {
-            if (req.file && req.file.path && fs.existsSync(req.file.path)) {
-                fs.unlinkSync(req.file.path);
-                console.log('Successfully deleted uploaded video file from attachments:', req.file.filename);
-            }
-        } catch (deleteError) {
-            console.error('Error deleting uploaded video file after successful processing:', deleteError);
-            // Don't return error here as the main operation was successful
-        }
+                // 4. Continue with video processing as before, using mergedFilePath as userVideoPath
+                const backgroundPath = path.join(projectRoot, `public${fetched_background_asset_path}`);
+                const fontPath = path.join(projectRoot, `public/fonts/${fetched_font_type_asset_path}`);
+                const iconPath = path.join(projectRoot, `public/backend_overlay${fetched_overlay_asset_path}`);
+                const finalVideoPath = path.join(projectRoot, 'public/finalvideo_2', `${code_id}_${Date.now()}.mp4`);
+                const finalVideoDir = path.dirname(finalVideoPath);
+                if (!fs.existsSync(finalVideoDir)) {
+                    fs.mkdirSync(finalVideoDir, { recursive: true });
+                }
+                const ffmpegCommand = `ffmpeg -i "${mergedFilePath}" -stream_loop -1 -i "${backgroundPath}" -stream_loop -1 -i "${iconPath}" -filter_complex " [0:v]setpts=PTS-STARTPTS, scale=w='if(lt(a,0.75),min(iw,720))':h='if(lt(a,0.75),min(ih,1280))':force_original_aspect_ratio=decrease[user_scaled]; [1:v]setpts=PTS-STARTPTS[bg]; [2:v]setpts=PTS-STARTPTS[icon]; [bg][user_scaled]overlay=x=(W-w)/2:y=80[tmp1]; [tmp1][icon]overlay=10:10[tmp2]; [tmp2]drawtext=fontfile='${fontPath}':text='${text}':fontcolor='${fetched_font_color_asset_path}':fontsize=28:x='${text_align}':y=h*0.76:box=1:boxcolor=black@0.5:boxborderw=5:line_spacing=1:enable='gte(t,0)'[final]" -map "[final]" -map "0:a?" -t "$(ffprobe -v error -select_streams v:0 -show_entries stream=duration -of default=nw=1:nk=1 \"${mergedFilePath}\")" -c:v libx264 -pix_fmt yuv420p -c:a copy "${finalVideoPath}"`;
+                try {
+                    const { stdout, stderr } = await execAsync(ffmpegCommand);
+                    console.log('FFmpeg processing stdout:', stdout);
+                    if (stderr) console.log('FFmpeg processing stderr:', stderr);
+                } catch (ffmpegError) {
+                    console.error('FFmpeg processing failed:', ffmpegError);
+                    // Optionally, update DB with error status
+                    return;
+                }
 
-        return response.success(res, {
-            uploded_id: result.data.uploded_id,
-            uploded_video_path: BASE_URL_LIVE + "/" +  result.data.uploded_video_path,
-            final_video_path: BASE_URL_LIVE + "/" +  finalVideoRelativePath
-        }, ERROR_MESSAGES.VIDEO_UPLOAD_SUCCESS);
+                // 5. Save final video path in DB
+                const finalVideoRelativePath = path.relative(path.join(projectRoot, 'public'), finalVideoPath).replace(/\\/g, '/');
+                await uploadService.updateAttachmentByCodeId(code_id, {
+                    uploded_video_path: finalVideoRelativePath
+                });
+
+                // 6. Clean up merged file, chunks.txt, and chunk directory (optional)
+                // try {
+                //     if (fs.existsSync(mergedFilePath)) fs.unlinkSync(mergedFilePath);
+                //     if (fs.existsSync(chunksTxtPath)) fs.unlinkSync(chunksTxtPath); // Clean up chunks.txt
+                //     // Delete the entire chunk directory
+                //     if (fs.existsSync(chunksDir)) fs.rmSync(chunksDir, { recursive: true, force: true });
+                // } catch (cleanupError) {
+                //     console.error('Cleanup error:', cleanupError);
+                // }
+            } catch (error) {
+                console.error('Error in background video processing:', error);
+            }
+        })();
+
+        // Respond immediately that processing has started
+        return response.success(res, { status: "processing" }, "Video is being processed. Please check status later.");
 
     } catch (error) {
         console.error('Error in uploadVideo:', error);
-        // Delete the uploaded file if any error occurs
-        if (req.file && req.file.path) {
-            try {
-                fs.unlinkSync(req.file.path);
-                console.log('Deleted uploaded file due to error:', req.file.filename);
-            } catch (deleteError) {
-                console.error('Error deleting file:', deleteError);
-            }
-        }
         return response.error(res, ERROR_MESSAGES.VIDEO_UPLOAD_FAIL);
     }
 };
@@ -259,8 +199,95 @@ const getAttachmentsByCodeId = async (req, res) => {
     }
 };
 
+// Upload video chunk (for chunked upload)
+const uploadVideoChunk = async (req, res) => {
+    try {
+        // const { error, value } = uploadVideoSchema.validate(req.body);
+        // Extract fields from form-data
+        const { uploadId, chunkNumber, token } = req.body;
+        console.log("req.body",req.body)
+        const missingFields = [];
+        if (!uploadId) missingFields.push('uploadId #####');
+        // if (!filename) missingFields.push('filename');
+        if (!chunkNumber) missingFields.push('chunkNumber');
+        if (!token) missingFields.push('token');
+        if (!req.file) missingFields.push('chunk (file)');
+        if (missingFields.length > 0) {
+            return response.validationError(
+                res,
+                `Missing required field(s): ${missingFields.join(', ')}`
+            );
+        }
+
+        // Validate token (admin or user)
+        const decoded = jwtUtils.verifyTokenAndRespond(res, token, process.env.JWT_SECRET);
+        if (!decoded) {
+            return; // Response already sent by verifyTokenAndRespond
+        }
+
+        // Save chunk to public/videos/attachements/{uploadId}/chunk_{chunkNumber}.{ext}
+        const uploadDir = path.join(__dirname, '..','..', 'public', 'videos', 'attachements', uploadId);
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        // Get file extension from uploaded file's original name
+        const ext = path.extname(req.file.originalname) || '';
+        const chunkPath = path.join(uploadDir, `chunk_${chunkNumber}${ext}`);
+        fs.writeFile(chunkPath, req.file.buffer, (err) => {
+            if (err) {
+                console.error('Error saving chunk:', err);
+                return response.error(res, 'Failed to save chunk');
+            }
+            return res.json({ status: true, message: 'Chunk uploaded successfully' });
+        });
+    } catch (error) {
+        console.error('Error in uploadVideoChunk:', error);
+        return response.error(res, error.message);
+    }
+};
+
+// Polling API: Check video processing status
+const checkVideoStatus = async (req, res) => {
+    try {
+        // Validate request body using Joi schema
+        const { error, value } = checkVideoStatusSchema.validate(req.body);
+        if (error) {
+            return response.validationError(res, error.details[0].message.replace(/"/g, ''));
+        }
+        const { token, code_id } = value;
+        // 1. Verify token
+        const decoded = jwtUtils.verifyTokenAndRespond(res, token, process.env.JWT_SECRET);
+        if (!decoded) return; // Response already sent
+
+        // 2. Check code_id matches user
+        const user_id = decoded;
+        if (code_id !== user_id.generated_code_id) {
+            return response.unauthorized(res, "Invalid Code Id");
+        }
+
+        // 3. Check DB for video path
+        const attachment = await uploadService.getAttachmentsByCodeId(code_id);
+        if (!attachment.success || !attachment.data || attachment.data.length === 0) {
+            return response.notFound(res, "Code ID not found");
+        }
+        if (attachment.data[0].uploded_video_path) {
+            return res.json({
+                status: "done",
+                video_url: BASE_URL_LIVE + "/" + attachment.data[0].uploded_video_path
+            });
+        } else {
+            return res.json({ status: "processing", video_url: "" });
+        }
+    } catch (error) {
+        console.error('Error in checkVideoStatus:', error);
+        return response.error(res, "Failed to check video status");
+    }
+};
+
 module.exports = {
     uploadVideo,
     getAttachment,
-    getAttachmentsByCodeId
+    getAttachmentsByCodeId,
+    uploadVideoChunk,
+    checkVideoStatus
 }; 
