@@ -10,6 +10,9 @@ const categoryRoutes = require("./routes/categoryRoutes");
 const metaRoutes = require("./routes/metaRoutes");
 const codeidRoutes = require("./routes/codeIDRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
+const shopRoutes = require('./routes/shopRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
+const webhookMiddleware = require('./middleware/webhookMiddleware');
 const pool = require("./config/database");
 const multer = require("multer");
 
@@ -19,6 +22,7 @@ const app = express();
 const PORT = process.env.SERVER_PORT || 5000;
 
 app.use(cors());
+app.use(webhookMiddleware);
 app.use(bodyParser.json());
 
 // Add request logging middleware
@@ -39,6 +43,8 @@ app.use("/api/categoty", categoryRoutes);
 app.use("/api/meta", metaRoutes);
 app.use("/api/codeid", codeidRoutes);
 app.use("/api/upload", uploadRoutes);
+app.use('/api', shopRoutes);
+app.use('/api/payment', paymentRoutes);
 app.use('/images', express.static('public/images'));
 app.use('/templates', express.static('public/templates'));
 app.use('/template', express.static('public/template'));

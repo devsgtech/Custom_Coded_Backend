@@ -1,6 +1,5 @@
 const pool = require('../config/database');
 const authService = require('./authService');
-const db = require('../config/database');
 const { ERROR_MESSAGES } = require('../config/constants');
 
 const codeidService = {
@@ -89,7 +88,7 @@ const codeidService = {
                 WHERE category_id = ? 
                 AND is_deleted = 0
             `;
-            const [result] = await db.query(query, [category_id]);
+            const [result] = await pool.execute(query, [category_id]);
             
             if (!result || result.length === 0) {
                 throw new Error(ERROR_MESSAGES.INVALID_CATEGORY_ID);
