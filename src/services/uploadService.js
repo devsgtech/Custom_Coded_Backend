@@ -23,9 +23,9 @@ const uploadService = {
                 data.columns_remarks || null
             ];
 
-            // Validate required fields
-            if (!params[0] || !params[1]) {
-                throw new Error('uploded_video_path and code_id are required');
+            // Validate required fields - only code_id is required for blank entries
+            if (!params[1]) {
+                throw new Error('code_id is required');
             }
             
             const [result] = await pool.execute(query, params);
@@ -165,7 +165,7 @@ const uploadService = {
             ];
 
             const [result] = await pool.execute(query, params);
-            
+            // console.log('Result*******:', result);
             if (result.affectedRows === 0) {
                 return { 
                     success: false, 

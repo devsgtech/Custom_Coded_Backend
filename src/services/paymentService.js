@@ -35,7 +35,7 @@ const paymentService = {
         try {
             const placeholders = shopIds.map(() => '?').join(',');
             const query = `
-                SELECT id, category_id, name, description, amount, \`key\` 
+                SELECT id, category_id, name, value, description, amount, \`key\` 
                 FROM tbl_shop 
                 WHERE id IN (${placeholders}) AND id IS NOT NULL
             `;
@@ -62,6 +62,15 @@ const paymentService = {
             // Ensure shopIds is an array
             const shopIdsArray = Array.isArray(shopIds) ? shopIds : [shopIds];
             const quantitiesArray = Array.isArray(quantities) ? quantities : [quantities];
+            
+            // If single quantity provided, apply to all items
+            if (quantitiesArray.length === 1 && shopIdsArray.length > 1) {
+                const singleQuantity = quantitiesArray[0];
+                quantitiesArray.length = 0; // Clear array
+                for (let i = 0; i < shopIdsArray.length; i++) {
+                    quantitiesArray.push(singleQuantity);
+                }
+            }
 
             // Get shop items details
             const shopItems = await paymentService.getShopItemsByIds(shopIdsArray);
@@ -76,7 +85,6 @@ const paymentService = {
             });
             
             totalAmount = Math.round(totalAmount * 100); // Convert to cents
-            
             // Create Payment Intent
             const paymentIntent = await stripe.paymentIntents.create({
                 amount: totalAmount,
@@ -87,7 +95,8 @@ const paymentService = {
                     generated_code_id: codeId,
                     quantities: quantitiesArray.join(','),
                     shop_names: shopItems.map(item => item.name).join(','),
-                    shop_keys: shopItems.map(item => item.key).join(',')
+                    shop_keys: shopItems.map(item => item.key).join(','),
+                    value: shopItems.map(item => item.value).join(',')
                 },
                 automatic_payment_methods: {
                     enabled: true,
@@ -161,30 +170,49 @@ const paymentService = {
     // Update payment record after verification
     updatePaymentRecordAfterVerification: async (paymentIntent) => {
         try {
-            const query = `
-                UPDATE tbl_payment_history
-                SET amount_paid = ?, payment_status = ?, CHECKOUT_EMAIL = ?, BILLING_COUNTRY = ?, ISSUER_COUNTRY = ?, CHARGE_STATUS = ?, CHECKOUT_TIMESTAMP = ?, PDT_NO = ?, QTY = ?
+            
+            // Check if payment record already exists and is already marked as succeeded
+            const checkQuery = `
+                SELECT payment_status FROM tbl_payment_history 
                 WHERE paymentIntentId = ?
             `;
-            const [result] = await pool.execute(query, [
-                paymentIntent.amount / 100,
-                true,
-                paymentIntent.receipt_email || null,
-                paymentIntent.charges?.data[0]?.billing_details?.address?.country || null,
-                paymentIntent.charges?.data[0]?.payment_method_details?.card?.country || null,
-                paymentIntent.status,
-                new Date(paymentIntent.created * 1000),
-                paymentIntent.id,
-                parseInt(paymentIntent.metadata.quantity),
-                paymentIntent.id
-            ]);
+            
+            const [existingPayment] = await pool.execute(checkQuery, [paymentIntent.id]);
+            
+            // Only update if payment doesn't exist or is not already succeeded
+            if (existingPayment.length === 0 || existingPayment[0].payment_status === false) {
+                const query = `
+                    UPDATE tbl_payment_history
+                    SET amount_paid = ?, payment_status = ?, CHECKOUT_EMAIL = ?, BILLING_COUNTRY = ?, ISSUER_COUNTRY = ?, CHARGE_STATUS = ?, CHECKOUT_TIMESTAMP = ?, PDT_NO = ?, QTY = ?
+                    WHERE paymentIntentId = ?
+                `;
+                
+                // Calculate total quantity from quantities array
+                const quantities = paymentIntent.metadata.quantities ? paymentIntent.metadata.quantities.split(',').map(q => parseInt(q) || 1) : [1];
+                const totalQuantity = quantities.reduce((sum, qty) => sum + qty, 0);
+
+                const [result] = await pool.execute(query, [
+                    paymentIntent.amount / 100,
+                    true,
+                    paymentIntent.receipt_email || null,
+                    paymentIntent.charges?.data[0]?.billing_details?.address?.country || null,
+                    paymentIntent.charges?.data[0]?.payment_method_details?.card?.country || null,
+                    paymentIntent.status,
+                    new Date(paymentIntent.created * 1000),
+                    paymentIntent.id,
+                    totalQuantity,
+                    paymentIntent.id
+                ]);
+            } else {
+                // console.log(`Payment ${paymentIntent.id} already marked as succeeded, skipping update`);
+            }
 
             // Store purchased shop items in tbl_payments_Shop
             if (paymentIntent.status === 'succeeded') {
                 await paymentService.storePurchasedShopItems(paymentIntent);
             }
 
-            return result.affectedRows > 0;
+            return true;
         } catch (error) {
             console.error('Error updating payment record after verification:', error);
             throw error;
@@ -203,30 +231,53 @@ const paymentService = {
 
             // Get shop items details to get amounts
             const shopItems = await paymentService.getShopItemsByIds(shopIds);
-
+            console.log("shopItems",shopItems)
             // Store each purchased item
             for (let i = 0; i < shopIds.length; i++) {
                 const shopItem = shopItems.find(item => item.id == shopIds[i]);
                 if (shopItem) {
-                    const query = `
-                        INSERT INTO tbl_payments_Shop 
-                        (code_id, amount, name, currency, stripe_payment_intent_id, stripe_customer_id, status, createdAt, updatedAt)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+                    console.log("shopItem",shopItem)
+                    // Check if this item already exists for this code_id and shop key
+                    const checkQuery = `
+                        SELECT id FROM tbl_payments_Shop 
+                        WHERE code_id = ? AND name = ? AND stripe_payment_intent_id = ?
                     `;
-
-                    await pool.execute(query, [
+                
+                    const [existingItems] = await pool.execute(checkQuery, [
                         codeId,
-                        shopItem.amount,
                         shopKeys[i] || shopItem.key,
-                        'USD',
-                        paymentIntent.id,
-                        paymentIntent.customer || null,
-                        'succeeded'
+                        paymentIntent.id
                     ]);
+
+                    // Only insert if this item doesn't already exist
+                    if (existingItems.length === 0) {
+                        console.log("shopItem.value",shopItem.value)
+                        const insertQuery = `
+                            INSERT INTO tbl_payments_Shop 
+                            (code_id, amount, name, currency, stripe_payment_intent_id, stripe_customer_id, status, value, account_type, createdAt, updatedAt)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+                        `;
+
+                        await pool.execute(insertQuery, [
+                            codeId,
+                            shopItem.amount,
+                            shopItem.key,
+                            'USD',
+                            paymentIntent.id,
+                            paymentIntent.customer || null,
+                            'succeeded',
+                            shopItem.value,
+                            'premium'
+                        ]);
+                        
+                        // console.log(`Stored shop item: ${shopKeys[i] || shopItem.key} for payment ${paymentIntent.id}`);
+                    } else {
+                        // console.log(`Skipped duplicate item: ${shopKeys[i] || shopItem.key} for payment ${paymentIntent.id}`);
+                    }
                 }
             }
 
-            console.log(`Stored ${shopIds.length} purchased shop items for payment ${paymentIntent.id}`);
+            // console.log(`Processed ${shopIds.length} shop items for payment ${paymentIntent.id}`);
         } catch (error) {
             console.error('Error storing purchased shop items:', error);
             throw error;
@@ -316,7 +367,6 @@ const paymentService = {
 
     // Get user's purchased shop items
     getUserPurchasedItems: async (codeId) => {
-        console.log("IDDDDD",codeId)
         try {
             const query = `
                 SELECT * FROM tbl_payments_Shop 
@@ -325,7 +375,22 @@ const paymentService = {
             `;
             
             const [rows] = await pool.execute(query, [codeId]);
-            return rows;
+            
+            // Group items by account_type
+            const groupedItems = {
+                normal: [],
+                premium: []
+            };
+            
+            rows.forEach(item => {
+                if (item.account_type === 'normal') {
+                    groupedItems.normal.push(item);
+                } else if (item.account_type === 'premium') {
+                    groupedItems.premium.push(item);
+                }
+            });
+            
+            return groupedItems;
         } catch (error) {
             console.error('Error fetching user purchased items:', error);
             throw error;

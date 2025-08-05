@@ -64,13 +64,73 @@ const codeidService = {
                 generated_code_id, 
                 code_data.is_active
             ]);
-            return result.insertId;
+            
+            const codeId = result.insertId;
+            
+            // After successfully creating the code ID, fetch default video generation stats
+            // and insert them into tbl_payments_Shop
+            await codeidService.insertDefaultVideoStats(codeId);
+            
+            return codeId;
         } catch (error) {
             console.error('Error creating Code ID:', error);
             if (error.message === ERROR_MESSAGES.INVALID_CATEGORY_ID) {
                 throw error;
             }
             throw new Error('Failed to create Code ID');
+        }
+    },
+
+    // Insert default video generation stats into tbl_payments_Shop
+    insertDefaultVideoStats: async (codeId) => {
+        try {
+            // Fetch the 4 default video generation stats
+            const fetchQuery = `
+                SELECT \`key\`, name, value 
+                FROM tbl_default_videoGeneration_stats 
+                WHERE \`key\` IN ('video_limit_increased', 'photo_limit_increased', 'audio_limit_increased', 'text_limit_increased')
+            `;
+            const [stats] = await pool.execute(fetchQuery);
+            
+            if (stats.length === 0) {
+                console.log('No default video generation stats found');
+                return;
+            }
+            
+            // Insert each stat into tbl_payments_Shop
+            for (const stat of stats) {
+                const insertQuery = `
+                    INSERT INTO tbl_payments_Shop (
+                        code_id, 
+                        name, 
+                        amount, 
+                        value, 
+                        account_type, 
+                        status,
+                        currency,
+                        stripe_payment_intent_id,
+                        stripe_customer_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `;
+                
+                await pool.execute(insertQuery, [
+                    codeId.toString(), // code_id as string
+                    stat.key, // name (using the key as name)
+                    0, // amount = 0
+                    stat.value, // value from the stats table
+                    'normal', // account_type = normal
+                    'succeeded', // status = succeeded
+                    'usd', // currency default
+                    '', // stripe_payment_intent_id (empty for default entries)
+                    null // stripe_customer_id (null for default entries)
+                ]);
+            }
+            
+            console.log(`Successfully inserted ${stats.length} default video generation stats for code ID: ${codeId}`);
+        } catch (error) {
+            console.error('Error inserting default video generation stats:', error);
+            // Don't throw error here to avoid breaking the main code creation process
+            // Just log the error for debugging
         }
     },
 

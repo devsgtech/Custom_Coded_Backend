@@ -65,6 +65,28 @@ const uploadVideo = async (req, res) => {
                     console.error('Error deleting previous video file:', deleteError);
                 }
             }
+        } else {
+            // If no existing attachments found, create a blank entry with code_id
+            try {
+                const blankAttachment = await uploadService.createAttachment({
+                    code_id: code_id,
+                    uploded_video_path: null,
+                    uploaded_audio_path: null,
+                    uploaded_images_path: null,
+                    uploaded_background_path: null,
+                    columns_remarks: null
+                });
+                
+                if (!blankAttachment.success) {
+                    console.error('Failed to create blank attachment:', blankAttachment.error);
+                    return response.serverError(res, 'Failed to create attachment record');
+                }
+                
+                console.log('Created blank attachment entry for code_id:', code_id);
+            } catch (createError) {
+                console.error('Error creating blank attachment:', createError);
+                return response.serverError(res, 'Failed to create attachment record');
+            }
         }
 
         // 1. Find all chunk files in the upload_path_id directory
@@ -438,7 +460,7 @@ const processMediaToVideoFromPath = async (req, res) => {
     // Determine account type from request body, JWT, or default to 'normal'
     const accountType = req.body.accountType || decoded.accountType || 'normal';
     const maxPhotos = accountType === 'premium' ? 20 : 10;
-    const maxAudioDuration = accountType === 'premium' ? 60 : 30;
+    const maxAudioDuration = accountType === 'premium' ? 61 : 31;
     if (photoFiles.length > maxPhotos) return res.status(400).json({ error: `Max ${maxPhotos} photos allowed.` });
     // Validate file sizes
     for (let photo of photoFiles) {
@@ -483,6 +505,7 @@ const processMediaToVideoFromPath = async (req, res) => {
     // If code_id is provided, check for previous video and delete it before generating new video
     if (req.body.code_id) {
       const previousAttachments = await uploadService.getAttachmentsByCodeId(req.body.code_id);
+      console.log("previousAttachments",previousAttachments)
       if (previousAttachments.success && previousAttachments.data && previousAttachments.data.length > 0) {
         for (const attachment of previousAttachments.data) {
           if (attachment.uploded_video_path) {
@@ -499,6 +522,28 @@ const processMediaToVideoFromPath = async (req, res) => {
         }
         // Clear the video path in the DB for this code_id
         await uploadService.updateAttachmentByCodeId(req.body.code_id, { uploded_video_path: null });
+      } else {
+        // If no existing attachments found, create a blank entry with code_id
+        try {
+          const blankAttachment = await uploadService.createAttachment({
+            code_id: req.body.code_id,
+            uploded_video_path: null,
+            uploaded_audio_path: null,
+            uploaded_images_path: null,
+            uploaded_background_path: null,
+            columns_remarks: null
+          });
+          
+          if (!blankAttachment.success) {
+            console.error('Failed to create blank attachment:', blankAttachment.error);
+            return res.status(500).json({ error: 'Failed to create attachment record' });
+          }
+          
+          console.log('Created blank attachment entry for code_id:', req.body.code_id);
+        } catch (createError) {
+          console.error('Error creating blank attachment:', createError);
+          return res.status(500).json({ error: 'Failed to create attachment record' });
+        }
       }
     }
     // Convert all images to PNG and rename to image001.png, image002.png, ... in videoDir
