@@ -1,13 +1,16 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const { getFaqList, createFaq, updateFaq, deleteFaq } = require('../controllers/faqController');
+const {
+  getFaqList,
+  createFaq,
+  updateFaq,
+  deleteFaq,
+} = require("../controllers/faqController");
+const authenticateToken = require("../middleware/authN");
 
-// Public routes
-router.get('/getFaq_List', getFaqList);
+router.post("/getFaq_List", getFaqList);
+router.post("/create", authenticateToken, createFaq);
+router.put("/update", authenticateToken, updateFaq);
+router.delete("/delete", authenticateToken, deleteFaq);
 
-// Protected routes (require admin authentication)
-router.post('/create', createFaq);
-router.put('/update', updateFaq);
-router.delete('/delete', deleteFaq);
-
-module.exports = router; 
+module.exports = router;

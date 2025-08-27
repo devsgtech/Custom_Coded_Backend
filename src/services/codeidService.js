@@ -4,6 +4,56 @@ const db = require('../config/database');
 const { ERROR_MESSAGES } = require('../config/constants');
 
 const codeidService = {
+    fetchCodeIds: async(currentPage, itemsPerPage, filters, search) => {
+        try {
+            let whereClause = ' WHERE 1=1';
+            const params = [];
+
+            if (filters && Array.isArray(filters)) {
+                filters.forEach((filter) => {
+                    if (filter.field === "is_active" && Array.isArray(filter.value) && filter.value.length > 0) {
+                        const placeholders = filter.value.map(() => "?").join(",");
+                        whereClause += ` AND is_active IN (${placeholders})`;
+                        params.push(...filter.value);
+                    }
+                });
+            }
+
+            if (search) {
+                whereClause += ' AND (generated_code LIKE ? OR generated_code_id LIKE ?)';
+                const searchKeyword = `%${search}%`;
+                params.push(searchKeyword, searchKeyword);
+            }
+
+            const countQuery = `SELECT COUNT(*) as totalItems FROM tbl_generated_code${whereClause}`;
+            const [countRows] = await pool.execute(countQuery, params);
+            const totalItems = countRows[0].totalItems;
+
+            let limitClause = '';
+            let page = 1;
+            let totalPages = 1;
+
+            // Only apply pagination if both currentPage and itemsPerPage are provided
+            if (currentPage && itemsPerPage) {
+                const limit = parseInt(itemsPerPage, 10);
+                page = parseInt(currentPage, 10);
+                totalPages = Math.ceil(totalItems / limit) || 1;
+
+                if (page > totalPages) page = 1;
+
+                const offset = (page - 1) * limit;
+                limitClause = ` LIMIT ${limit} OFFSET ${offset}`;
+            }
+
+            const dataQuery = `SELECT * FROM tbl_generated_code${whereClause} ORDER BY generated_time DESC${limitClause}`;
+            const [codeIds] = await pool.execute(dataQuery, params);
+
+            return { codeIds, totalItems, totalPages, currentPage: page };
+        } catch (error) {
+            console.error('Error fetching codeIds:', error);
+            throw error;
+        }
+    },
 
     // Check if code exists
     checkCodeExists: async (generated_code, generated_code_id) => {
@@ -47,31 +97,53 @@ const codeidService = {
     },
 
     // Create new code id
-    createcodeID: async (code_data) => {
+     createcodeID: async (data) => {
+        const { category_id, is_active, numberOfCodes } = data;
         try {
-            // First validate the category_id
-            await codeidService.validateCategoryId(code_data.category_id);
+            // 1. Validate the category_id once.
+            await codeidService.validateCategoryId(category_id);
+            if(numberOfCodes < 1) {
+                throw new Error("Number must be greater than 0");
+            }
 
-            // Generate unique codes
-            const { generated_code, generated_code_id } = await codeidService.generateUniqueCodes();
+            const values = [];
+            const generatedCodes = [];
 
+            // 2. Loop to generate unique codes and prepare them for insertion.
+            for (let i = 0; i < numberOfCodes; i++) {
+                const { generated_code, generated_code_id } = await codeidService.generateUniqueCodes();
+                
+                //todo: Bcrypt generated_code if asked
+                values.push(category_id, generated_code, generated_code_id, is_active);
+                
+                generatedCodes.push({ generated_code, generated_code_id });
+             }
+ 
+            if (values.length === 0) {
+                return { message: "No codes to generate." };
+            }
+
+            // 3. Construct the bulk INSERT query.
+            const placeholders = Array(numberOfCodes).fill('(?, ?, ?, ?, NOW())').join(', ');
             const query = `
                 INSERT INTO tbl_generated_code (category_id, generated_code, generated_code_id, is_active, generated_time) 
-                VALUES (?, ?, ?, ?, NOW())
+                VALUES ${placeholders}
             `;
-            const [result] = await pool.execute(query, [
-                code_data.category_id, 
-                generated_code, 
-                generated_code_id, 
-                code_data.is_active
-            ]);
-            return result.insertId;
+
+            // 4. Execute the single bulk query.
+            const [result] = await pool.execute(query, values);
+
+            return {
+                message: `${result.affectedRows} codes created successfully.`,
+                generatedCodes: generatedCodes
+            };
+
         } catch (error) {
-            console.error('Error creating Code ID:', error);
+            console.error('Error creating Code IDs:', error);
             if (error.message === ERROR_MESSAGES.INVALID_CATEGORY_ID) {
                 throw error;
             }
-            throw new Error('Failed to create Code ID');
+            throw new Error('Failed to create Code IDs');
         }
     },
 
@@ -81,7 +153,7 @@ const codeidService = {
     },
 
     // Validate category_id
-    validateCategoryId: async (category_id) => {
+      validateCategoryId: async (category_id) => {
         try {
             const query = `
                 SELECT category_id 
@@ -108,7 +180,31 @@ const codeidService = {
           code += characters.charAt(Math.floor(Math.random() * characters.length));
         }
         return code;
-      }
+      },
+
+    deleteCodeId: async (code_id) => {
+        try {
+            // First, check if the code_id exists
+            const [existingCode] = await db.query('SELECT * FROM tbl_generated_code WHERE code_id = ?', [code_id]);
+
+            if (existingCode.length === 0) {
+                throw new Error('Code ID not found');
+            }
+
+            // If it exists, proceed with deletion
+            const deleteQuery = `DELETE FROM tbl_generated_code WHERE code_id = ?`;
+            const [result] = await db.query(deleteQuery, [code_id]);
+
+            if (result.affectedRows === 0) {
+                throw new Error('Failed to delete Code ID, it may have been deleted by another process.');
+            }
+
+            return result;
+        } catch (error) {
+            console.error('Error deleting code ID:', error);
+            throw error;
+        }
+    }
 
     // Create Code ID
     // createCodeId: async (codeData) => {

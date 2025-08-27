@@ -3,11 +3,48 @@ const authService = require('./authService');
 
 const faqService = {
     // Get all FAQs
-    getAllFaqs: async () => {
+    getAllFaqs: async ({search, currentPage, itemsPerPage}) => {
         try {
-            const query = 'SELECT * FROM tbl_faq WHERE is_deleted = 0 ORDER BY created_on DESC';
-            const [rows] = await pool.execute(query);
-            return rows;
+            let whereClause = ' WHERE is_deleted = 0';
+            const params = [];
+            let limitClause = '';
+            let page = 1;
+            let totalPages = 1;
+            let totalItems = 0;
+
+            if (search) {
+                whereClause += ' AND (faq_question LIKE ? OR faq_answer LIKE ?)';
+                const searchKeyword = `%${search}%`;
+                params.push(searchKeyword, searchKeyword);
+            }
+
+            // Only apply pagination if both currentPage and itemsPerPage are provided
+            if (currentPage && itemsPerPage) {
+                const countQuery = `SELECT COUNT(*) as totalItems FROM tbl_faq${whereClause}`;
+                const [countRows] = await pool.execute(countQuery, params);
+                totalItems = countRows[0].totalItems;
+
+                const limit = parseInt(itemsPerPage, 10);
+                page = parseInt(currentPage, 10);
+                totalPages = Math.ceil(totalItems / limit) || 1;
+
+                if (page > totalPages) {
+                    page = 1;
+                }
+
+                const offset = (page - 1) * limit;
+                limitClause = ` LIMIT ${limit} OFFSET ${offset}`;
+            }
+
+            const dataQuery = `SELECT * FROM tbl_faq${whereClause} ORDER BY created_on DESC${limitClause}`;
+            const [faqs] = await pool.execute(dataQuery, params);
+
+            // If we didn't paginate, we need to get the totalItems from the result length
+            if (!limitClause) {
+                totalItems = faqs.length;
+            }
+
+            return { faqs, totalItems, totalPages, currentPage: page };
         } catch (error) {
             console.error('Error fetching FAQs:', error);
             throw new Error('Failed to fetch FAQs');

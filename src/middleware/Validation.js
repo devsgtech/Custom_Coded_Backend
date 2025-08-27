@@ -15,6 +15,36 @@ const faqDataSchema = Joi.object({
     admin_id: Joi.number().required()
 });
 
+const fetchAdminUsersSchema = Joi.object({
+    currentPage: Joi.number().required().messages({
+        'any.required': 'Page number is required'
+    }),
+    itemsPerPage: Joi.number().required().messages({
+        'any.required': 'Items per page is required'
+    }),
+    filters: Joi.array().optional(),
+    search: Joi.string().optional().allow('')
+})
+
+const createAdminUserSchema = Joi.object({
+    name: Joi.string().required(),
+    email: Joi.string().email({ tlds: { allow: false }}).required(),
+    password: Joi.string().required(),
+    confirmPassword: Joi.string().required(),
+    role: Joi.string().required(),
+    security_questions: Joi.array().items(
+        Joi.object({
+            question_id: Joi.number().required(),
+            answer: Joi.string().required()
+        })
+    ).required()
+})
+
+const findMetaSchema = Joi.object({
+    meta_id: Joi.number().required()
+})
+
+
 const createmetaSchema = Joi.object({
     token: Joi.string().required(),
     meta_data: Joi.object({
@@ -24,15 +54,45 @@ const createmetaSchema = Joi.object({
       }).required()
 });
 
+const updateMetaSchema = Joi.object({
+    meta_id: Joi.number().required(),
+    meta_key: Joi.string().required(),
+    meta_value: Joi.string().required(),
+})
+
+const deleteMetaSchema = Joi.object({
+    meta_id: Joi.number().required(),
+    meta_value: Joi.string().required(),
+})
+
+const addMetaAssetSchema = Joi.object({
+    meta_id: Joi.number().required(),
+    meta_key: Joi.string().required(),
+})
+
+const fetchCodeIdSchema = Joi.object({
+    currentPage: Joi.number().required().messages({
+        'any.required': 'Page number is required'
+    }),
+    itemsPerPage: Joi.number().required().messages({
+        'any.required': 'Items per page is required'
+    }),
+    filters: Joi.array().optional(),
+    search: Joi.string().optional().allow('')
+});
+
+const deleteCodeIdSchema = Joi.object({
+    code_id: Joi.number().required()
+})
+
 const createcodeidSchema = Joi.object({
-    token: Joi.string().required(),
     code_data: Joi.object({
-        category_id: Joi.string().required()
+        category_id: Joi.string().required(),
+        numberOfCodes: Joi.number().optional().default(1),
       }).required()
 });
 
 const createFaqSchema = Joi.object({
-    token: Joi.string().required(),
     faq_data: faqDataSchema
 });
 
@@ -47,14 +107,12 @@ const createCategotySchema = Joi.object({
 });
 
 const updateFaqSchema = Joi.object({
-    token: Joi.string().required(),
     faq_id: Joi.number().required(),
     faq_question: Joi.string().required(),
     faq_answer: Joi.string().required()
 });
 
 const deleteFaqSchema = Joi.object({
-    token: Joi.string().required(),
     faq_id: Joi.number().required()
 });
 
@@ -62,6 +120,26 @@ const getmetaSchema = Joi.object({
     meta_group: Joi.string().required(),
     ip_address: Joi.string().required()
 });
+
+const getMessagesSchema = Joi.object({
+    currentPage: Joi.number().required().messages({
+        'any.required': 'Page number is required'
+    }),
+    itemsPerPage: Joi.number().required().messages({
+        'any.required': 'Items per page is required'
+    }),
+    filters: Joi.array().optional(),
+    search: Joi.string().optional().allow('')
+});
+
+const changeStatusSchema = Joi.object({
+    status: Joi.string().required().messages({
+        'any.required': 'Status is required'
+    }),
+    contact_id: Joi.number().required().messages({
+        'any.required': 'Contact ID is required'
+    })
+})
 
 const UserLoginSchema = Joi.object({
     generated_code_id: Joi.string().length(10).required().messages({
@@ -91,10 +169,32 @@ module.exports = {
     createFaqSchema,
     updateFaqSchema,
     deleteFaqSchema,
+
+    fetchAdminUsersSchema,
+    createAdminUserSchema,
+
     createCategotySchema,
+
     createmetaSchema,
     getmetaSchema,
+    findMetaSchema,
+    updateMetaSchema,
+    deleteMetaSchema,
+    addMetaAssetSchema,
+
+    getMessagesSchema,
+    changeStatusSchema,
+    
+    fetchCodeIdSchema,
+    deleteCodeIdSchema,
     createcodeidSchema,
+    
     UserLoginSchema,
+<<<<<<< Updated upstream
     uploadVideoSchema
+=======
+    
+    uploadVideoSchema,
+    checkVideoStatusSchema
+>>>>>>> Stashed changes
 };

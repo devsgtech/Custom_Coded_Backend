@@ -1,34 +1,33 @@
 const adminService = require('../services/adminService');
-const { adminLoginSchema } = require('../middleware/adminValidation');
+const { adminLoginSchema, securityQuestionsSchema, verifySecurityAnswerSchema } = require('../middleware/adminValidation');
 const response = require('../utils/response');
-const { ERROR_MESSAGES } = require('../config/constants')
+const { ERROR_MESSAGES, CAPTCHA_VERIFY_URL } = require('../config/constants');
+const axios = require('axios');
 
 const login = async (req, res) => {
-    // const { email, password } = req.body;
-    // console.log("req",req);
-    // console.log("res",res);
     try {
-
         const { error, value } = adminLoginSchema.validate(req.body);
         if (error) {
             return response.validationError(res, error.details[0].message.replace(/"/g, ''));
         }
 
-        const { email, password } = value;
+        const { email, password, recaptcha_token } = value;
 
-
-        // Validate input
-        // if (!email || !password) {
-        //     return response.error(res, 'Email and password are required2', 400);
-        // }
-
-        // if (!validateEmail(email)) {
-        //     return response.validationError(res, 'Invalid email format2');
-        // }
-
-        // if (!validatePassword(password)) {
-        //     return response.validationError(res, 'Password must be at least 6 characters long2');
-        // }
+        // Step 1: Verify CAPTCHA before proceeding
+        const verifyUrl = CAPTCHA_VERIFY_URL;
+        const captchaResponse = await axios.post(verifyUrl, null, {
+          params: {
+            secret: process.env.CAPTCHA_SECRET_KEY,
+            response: recaptcha_token,
+            // remoteip: req.ip,
+          },
+        });
+        if (!captchaResponse.data.success) {
+          return response.validationError(
+            res,
+            ERROR_MESSAGES.CAPTCHA_VERIFICATON_FAILED
+          );
+        }
 
         // Get admin from database
         const admin = await adminService.findAdminByEmail(email);
@@ -76,6 +75,59 @@ const login = async (req, res) => {
     }
 };
 
+const securityQuestions = async (req, res) => {
+    try {
+        const questions = await adminService.fetchSecurityQuestions(req.user.id);
+        if (!questions || questions.length === 0) {
+            return response.notFound(res, ERROR_MESSAGES.NO_SECURITY_QUESTIONS_FOUND);
+        }
+        return response.success(res, questions, ERROR_MESSAGES.SECURITY_QUESTIONS_FETCHED_SUCCESSFULLY);
+    } catch (error) {
+        console.error('Error fetching security questions:', error);
+        return response.error(res, {
+            message: error.message,
+            stack: error.stack,
+            code: error.code,
+            sqlMessage: error.sqlMessage,
+            sqlState: error.sqlState
+        }, 500);
+    }
+}
+
+const verifySecurityAnswer = async (req, res) => {
+    try {
+        const { error, value } = verifySecurityAnswerSchema.validate(req.body);
+        if (error) {
+            return response.validationError(res, error.details[0].message.replace(/"/g, ''));
+        }
+
+        const { questions } = value;
+        const admin_user_id = req.user.id;
+
+        for (const question of questions) {
+            console.log(question)
+            const isMatch = await adminService.verifySecurityAnswer(admin_user_id, question.question_id, question.answer);
+            // console.log(isMatch)
+            if (!isMatch) {
+                return response.error(res, 'Incorrect answer for one or more questions', 401);
+            }
+        }
+
+        return response.success(res, null, 'Answers verified successfully');
+    } catch (error) {
+        console.error('Error verifying security answer:', error);
+        return response.error(res, {
+            message: error.message,
+            stack: error.stack,
+            code: error.code,
+            sqlMessage: error.sqlMessage,
+            sqlState: error.sqlState
+        }, 500);
+    }
+}
+
 module.exports = {
-    login
+    login,
+    securityQuestions,
+    verifySecurityAnswer
 }; 

@@ -1,5 +1,6 @@
-// const BASE_URL_LIVE = 'http://localhost:5000';
-const BASE_URL_LIVE          = 'https://customcodedweb-api.orientaloutsourcing.com';
+// const BASE_URL_LOCAL = 'http://localhost:5001';
+const BASE_URL_LIVE          = 'http://localhost:5001';
+// const BASE_URL_LIVE          = 'https://customcodedweb-api.orientaloutsourcing.com';
 const CAPTCHA_VERIFY_URL     = 'https://www.google.com/recaptcha/api/siteverify';
 
 const ERROR_MESSAGES = {
@@ -31,7 +32,18 @@ const ERROR_MESSAGES = {
   VIDEO_NOT_FOUND: 'Video not found',
   VIDEO_FETCH_FAIL: 'Failed to fetch video',
   VIDEO_SIZE_EXCEEDED: 'Video size exceeds 100MB limit',
-  INVALID_VIDEO_TYPE: 'Invalid video file type. Only mp4, mov, avi, wmv, flv, and mkv files are allowed'
+  INVALID_VIDEO_TYPE: 'Invalid video file type. Only mp4, mov, avi, wmv, flv, and mkv files are allowed',
+  MESSAGE_STATUS_UPDATED: 'Message status updated successfully',
+  MESSAGE_STATUS_UPDATE_FAILED: 'Failed to update message status', 
+
+  ACCOUNT_USERS_SUCCESS: 'Users fetched successfully',
+  ACCOUNT_USERS_FAIL: 'Failed to fetch users',
+  NO_SECURITY_QUESTIONS_FOUND: 'No security questions found for this user',
+  SECURITY_QUESTIONS_FETCHED_SUCCESSFULLY: 'Security questions fetched successfully',
+  ADMIN_USER_UPDATE_SUCCESS: 'Admin user updated successfully.',
+  ADMIN_USER_NOT_FOUND: 'Admin user not found or no new data provided.',
+  SECURITY_QUESTIONS_SUCCESS: 'Security questions fetched successfully',
+  SECURITY_QUESTIONS_FAIL: 'Failed to fetch security questions',
 };
 
 const GeneralLogTypes = Object.freeze({

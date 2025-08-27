@@ -11,7 +11,8 @@ const authService = {
                 { 
                     id: admin.admin_id,
                     email: admin.email,
-                    name: admin.name
+                    name: admin.name,
+                    role: admin.role
                 },
                 process.env.JWT_SECRET,
                 { expiresIn: SessionTime.ADMIN_JWT_TOKEN_EXPIRE_TIME } // Set a longer expiry since we'll handle inactivity separately
@@ -70,16 +71,16 @@ const authService = {
             console.log('Verifying token for admin_id:', adminId);
             console.log('Token:', token);
             
-            // First verify the token is valid and get the payload
-            const decoded = jwt.verify(token, process.env.JWT_SECRET);
-            console.log('Decoded token:', decoded.id);
-            console.log("adminId", adminId);
+            // // First verify the token is valid and get the payload
+            // const decoded = jwt.verify(token, process.env.JWT_SECRET);
+            // console.log('Decoded token:', decoded.id);
+            // console.log("adminId", adminId);
             
-            // Check if the token payload matches the admin_id
-            if (decoded.id != adminId) {
-                console.log('Token admin_id mismatch');
-                return false;
-            }
+            // // Check if the token payload matches the admin_id
+            // if (decoded.id != adminId) {
+            //     console.log('Token admin_id mismatch');
+            //     return false;
+            // }
 
             // Check if token exists and session hasn't expired
             const query = `
