@@ -15,9 +15,8 @@ jobs:
 
       - name: Copy backend source to server folder
         run: |
-          echo "Copying source files to /home/customcodedweb/backend-api..."
-          cp -r src/. /home/customcodedweb/backend-api/
-          chmod -R u+rwX /home/customcodedweb/backend-api
+          sudo cp -r src/. /home/customcodedweb/backend-api/
+          sudo chmod -R u+rwX /home/customcodedweb/backend-api
 
       - name: Install dependencies
         run: npm install --legacy-peer-deps
