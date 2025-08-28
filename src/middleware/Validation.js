@@ -115,6 +115,21 @@ const checkVideoStatusSchema = Joi.object({
     })
 });
 
+const publishVideoSchema = Joi.object({
+    token: Joi.string().required().messages({
+        'any.required': 'Token is required'
+    }),
+    code_id: Joi.string().required().messages({
+        'any.required': 'Code ID is required'
+    }),
+    id: Joi.number().required().messages({
+        'any.required': 'ID is required'
+    }),
+    email_address: Joi.string().email({ tlds: { allow: false } }).required().messages({
+        'any.required': 'Email Address is required'
+    }),
+});
+
 module.exports = { 
     greetingSchema,
     faqDataSchema,
@@ -127,5 +142,6 @@ module.exports = {
     createcodeidSchema,
     UserLoginSchema,
     uploadVideoSchema,
-    checkVideoStatusSchema
+    checkVideoStatusSchema,
+    publishVideoSchema
 };

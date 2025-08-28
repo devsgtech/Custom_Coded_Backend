@@ -47,11 +47,13 @@ app.use('/api', shopRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/images', express.static('public/images'));
 app.use('/templates', express.static('public/templates'));
-app.use('/template', express.static('public/template'));
+// app.use('/template', express.static('public/template'));
+app.use('/openlisting', express.static('public/openlisting'));
 app.use('/fonts', express.static('public/fonts'));
 app.use('/background', express.static('public/background'));
 app.use('/overlay', express.static('public/overlay'));
 app.use('/finalvideo_2', express.static('public/finalvideo_2'));
+app.use('/final_video', express.static('public/final_video'));
 app.use('/videos', express.static('public/videos'));
 app.use('/videos/attachements', express.static('public/videos/attachements'));
 

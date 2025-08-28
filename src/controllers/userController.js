@@ -22,8 +22,9 @@
 const userService = require('../services/userService');
 const ipBanService = require('../services/ipBanService');
 const response = require('../utils/response');
-const { ERROR_MESSAGES,GeneralLogTypes } = require('../config/constants')
+const { ERROR_MESSAGES,GeneralLogTypes,BASE_URL_LIVE } = require('../config/constants')
 const {UserLoginSchema} = require('../middleware/Validation')
+const uploadService = require('../services/uploadService');
 
 const userLogin = async (req, res) => {
   // const { email, password } = req.body;
@@ -39,8 +40,8 @@ const userLogin = async (req, res) => {
       const { generated_code_id, generated_code,session_ip,session_timezone, session_country } = value;
 
       const checkIpBanned = await ipBanService.checkIpBanned(session_ip);
-      console.log("&&&&&&&&&&&&&",checkIpBanned)
-      console.log("&&&&&&&&&&&&&1",res)
+      // console.log("&&&&&&&&&&&&&",checkIpBanned)
+      // console.log("&&&&&&&&&&&&&1",res)
       if (checkIpBanned.isBanned) {
         return response.unauthorized(res, "IP is banned",checkIpBanned );
     }
@@ -52,11 +53,11 @@ const userLogin = async (req, res) => {
           const d = await ipBanService.recordFailedAttempt(session_ip,"Failed Login");
           return response.unauthorized(res, ERROR_MESSAGES.INVALID_CODE_ID,d);
       }
-      console.log("*******************USER - ",user)
+      // console.log("*******************USER - ",user)
       // Verify user code from database
       const isValidCode = await userService.verifyCode(generated_code, user.generated_code);
       if (!isValidCode) {
-        console.log("&&&&&&&&&&&&&2",res)
+        // console.log("&&&&&&&&&&&&&2",res)
         const d = await ipBanService.recordFailedAttempt(session_ip,"Failed Login");
         return response.unauthorized(res, ERROR_MESSAGES.INVALID_CODE,d);
       } else {
@@ -79,14 +80,27 @@ const userLogin = async (req, res) => {
           session_country
       );
 
+      // Fetch generated video info for this user (if any)
+      let generatedVideoInfo = null;
+      try {
+        const videoInfoResult = await uploadService.getGeneratedVideoInfoByCodeId(user.code_id);
+        if (videoInfoResult.success) {
+          videoInfoResult.data.final_video_path = BASE_URL_LIVE + "/" + videoInfoResult.data.final_video_path
+          generatedVideoInfo = videoInfoResult.data;
+        }
+      } catch (e) {
+        // Do not block login on video info fetch failure
+        console.error('Failed to fetch generated video info during login:', e.message);
+      }
+
       // Return success response (without exposing token expiry)
       return response.success(res, {
           token,
           user: {
               code_id: user.code_id,
               generated_code_id: user.generated_code_id,
-              tokenExpiry:tokenExpiry
-
+              tokenExpiry: tokenExpiry,
+              generated_video_info: generatedVideoInfo
           }
       }, ERROR_MESSAGES.USER_LOGIN_SUCCESS);
 

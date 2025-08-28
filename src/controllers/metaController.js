@@ -115,10 +115,10 @@ const getTemplatesList = async (req, res) => {
         let color_list = [];
         let background_list = [];
         let overlay_list = [];
-        let template_list = [];
+        let open_list = [];
         let font_type_list = [];
         try {
-            const metas = await metaService.getAllMetas("9,10,11,12,13");
+            const metas = await metaService.getAllMetas("9,10,11,12,13,14");
             if (metas.success && Array.isArray(metas.data)) {
                 color_list = metas.data.filter(item => item.meta_key === 'font_color').map(item => ({
                         id: item.meta_id,
@@ -126,24 +126,84 @@ const getTemplatesList = async (req, res) => {
                         color_code: item.meta_value,
                         name: item.remarks || ''
                     }));
-                background_list = metas.data.filter(item => item.meta_key === 'background_video_path').map(item => ({
+                // Build background list with associated background_image_path by meta_group "id_<meta_id>"
+                const bgVideoItems = metas.data.filter(item => item.meta_key === 'background_video_path');
+                background_list = [];
+                for (const item of bgVideoItems) {
+                    let image_path = null;
+                    try {
+                        const imageGroup = `id_${item.meta_id}`;
+                        const imageMetas = await metaService.getAllMetas(imageGroup);
+                        if (imageMetas.success && Array.isArray(imageMetas.data)) {
+                            const imgRow = imageMetas.data.find(m => m.meta_key === 'background_image_path');
+                            if (imgRow && imgRow.meta_value) {
+                                image_path = `${BASE_URL_LIVE}${imgRow.meta_value.trim()}`;
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Error fetching background_image_path for', item.meta_id, e.message);
+                    }
+
+                    background_list.push({
                         id: item.meta_id,
                         type: item.meta_key,
                         path: `${BASE_URL_LIVE}${item.meta_value.trim()}`,
-                        name: item.remarks || ''
-                    }));
-                overlay_list = metas.data.filter(item => item.meta_key === 'overlay_video_path').map(item => ({
-                    id: item.meta_id,
-                    type: item.meta_key,
-                    path: `${BASE_URL_LIVE}${item.meta_value.trim()}`,
-                    name: item.remarks || ''
-                }));
-                template_list = metas.data.filter(item => item.meta_key === 'template').map(item => ({
-                    id: item.meta_id,
-                    type: item.meta_key,
-                    path: `${BASE_URL_LIVE}${item.meta_value.trim()}`,
-                    name: item.remarks || ''
-                }));
+                        name: item.remarks || '',
+                        image_path
+                    });
+                }
+                // Build overlay list with associated overlay_image_path by meta_group "id_<meta_id>"
+                const overlayVideoItems = metas.data.filter(item => item.meta_key === 'overlay_video_path');
+                overlay_list = [];
+                for (const item of overlayVideoItems) {
+                    let image_path = null;
+                    try {
+                        const imageGroup = `id_${item.meta_id}`;
+                        const imageMetas = await metaService.getAllMetas(imageGroup);
+                        if (imageMetas.success && Array.isArray(imageMetas.data)) {
+                            const imgRow = imageMetas.data.find(m => m.meta_key === 'overlay_image_path');
+                            if (imgRow && imgRow.meta_value) {
+                                image_path = `${BASE_URL_LIVE}${imgRow.meta_value.trim()}`;
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Error fetching overlay_image_path for', item.meta_id, e.message);
+                    }
+
+                    overlay_list.push({
+                        id: item.meta_id,
+                        type: item.meta_key,
+                        path: `${BASE_URL_LIVE}${item.meta_value.trim()}`,
+                        name: item.remarks || '',
+                        image_path
+                    });
+                }
+                // Build opening list with associated open_image_path by meta_group "id_<meta_id>"
+                const openVideoItems = metas.data.filter(item => item.meta_key === 'open_video_path');
+                open_list = [];
+                for (const item of openVideoItems) {
+                    let image_path = null;
+                    try {
+                        const imageGroup = `id_${item.meta_id}`;
+                        const imageMetas = await metaService.getAllMetas(imageGroup);
+                        if (imageMetas.success && Array.isArray(imageMetas.data)) {
+                            const imgRow = imageMetas.data.find(m => m.meta_key === 'open_image_path');
+                            if (imgRow && imgRow.meta_value) {
+                                image_path = `${BASE_URL_LIVE}${imgRow.meta_value.trim()}`;
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Error fetching open_image_path for', item.meta_id, e.message);
+                    }
+
+                    open_list.push({
+                        id: item.meta_id,
+                        type: item.meta_key,
+                        path: `${BASE_URL_LIVE}${item.meta_value.trim()}`,
+                        name: item.remarks || '',
+                        image_path
+                    });
+                }
                 font_type_list = metas.data.filter(item => item.meta_key === 'font_type').map(item => ({
                     id: item.meta_id,
                     type: item.meta_key,
@@ -161,7 +221,7 @@ const getTemplatesList = async (req, res) => {
             color_list,
             background_list,
             overlay_list,
-            template_list,
+            open_list,
             font_type_list
         });
     } catch (error) {

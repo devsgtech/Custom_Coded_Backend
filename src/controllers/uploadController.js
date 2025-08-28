@@ -2,7 +2,7 @@ const uploadService = require('../services/uploadService');
 const metaService = require('../services/metaService');
 const response = require('../utils/response');
 const jwtUtils = require('../utils/jwtUtils');
-const { uploadVideoSchema, checkVideoStatusSchema } = require('../middleware/Validation');
+const { uploadVideoSchema, checkVideoStatusSchema, publishVideoSchema } = require('../middleware/Validation');
 const { ERROR_MESSAGES, BASE_URL_LIVE } = require('../config/constants');
 const path = require('path');
 const fs = require('fs');
@@ -12,6 +12,79 @@ const util = require('util');
 const execAsync = util.promisify(exec);
 const { execSync } = require('child_process');
 
+// Publish final video: verify token, mark as generated, move file to public/final_video
+const publishFinalVideo = async (req, res) => {
+    try {
+        const { error, value } = publishVideoSchema.validate(req.body);
+        if (error) {
+            return response.validationError(res, error.details[0].message.replace(/"/g, ''));
+        }
+        const { token, code_id, id, email_address } = value;
+        // console.log("req.body",req.body)
+        // if (!token || !code_id || !id) {
+        //     return response.validationError(res, 'token, code_id and id are required');
+        // }
+
+        // Verify token
+        const decoded = jwtUtils.verifyTokenAndRespond(res, token, process.env.JWT_SECRET);
+        const main_id = decoded.code_id;
+        // console.log("decoded",decoded)
+        if (!decoded) return;
+        const user_id = decoded;
+        if (code_id !== user_id.generated_code_id) {
+            return response.unauthorized(res, 'Invalid Code Id');
+        }
+
+        // Get current generated video info
+        const info = await uploadService.getGeneratedVideoInfoByCodeId(main_id);
+        if (!info.success) {
+            return response.error(res, 'Failed to fetch video info');
+        }
+        if (!info.data || !info.data.file_path) {
+            return response.notFound(res, 'No generated video to publish');
+        }
+        if (info.data.final_video_generated === 1) {
+            return response.notFound(res, 'Video is already published');
+        }
+
+        const projectRoot = path.join(__dirname, '..', '..');
+        const srcRelative = info.data.file_path.startsWith('finalvideo_2/') ? info.data.file_path : `finalvideo_2/${path.basename(info.data.file_path)}`;
+        const srcAbs = path.join(projectRoot, 'public', srcRelative);
+        const destDir = path.join(projectRoot, 'public', 'final_video');
+        const destAbs = path.join(destDir, path.basename(srcAbs));
+        const destRelative = path.relative(path.join(projectRoot, 'public'), destAbs).replace(/\\/g, '/');
+
+        // Ensure destination dir exists
+        if (!fs.existsSync(destDir)) {
+            fs.mkdirSync(destDir, { recursive: true });
+        }
+
+        // Move file if exists
+        if (!fs.existsSync(srcAbs)) {
+            return response.notFound(res, 'Source video file not found');
+        }
+
+        fs.renameSync(srcAbs, destAbs);
+
+        // Mark published in DB and set timers
+        const mark = await uploadService.markVideoAsPublished({
+            id,
+            final_video_path: destRelative,
+            email_address
+        });
+        if (!mark.success) {
+            return response.error(res, 'Failed to update publish state');
+        }
+
+        return response.success(res, {
+            code_id,
+            final_video_path: destRelative
+        }, 'Video published successfully');
+    } catch (error) {
+        console.error('Error in publishFinalVideo:', error);
+        return response.error(res, 'Failed to publish video');
+    }
+};
 // Upload video
 const uploadVideo = async (req, res) => {
     try {
@@ -42,6 +115,7 @@ const uploadVideo = async (req, res) => {
         const fetched_font_type_asset_path = metas4.data[0].remarks;
         // Verify user token and get user_id from token FIRST
         const decoded = jwtUtils.verifyTokenAndRespond(res, token, process.env.JWT_SECRET);
+        const main_id = decoded.code_id;
         if (!decoded) {
             return; // Response already sent by verifyTokenAndRespond
         }
@@ -109,6 +183,17 @@ const uploadVideo = async (req, res) => {
 
         // Clear the video path in DB before starting processing
         await uploadService.updateAttachmentByCodeId(code_id, { uploded_video_path: null });
+        // Upsert generated video info (initial record before processing)
+        await uploadService.upsertGeneratedVideoInfo({
+            main_id,
+            file_path: null,
+            text,
+            text_font_style: String(font_type_asset_id),
+            text_font_color: String(font_color_asset_id),
+            text_font_alignment: String(text_alignment),
+            background_path: String(background_asset_id),
+            overlay_path: String(overlay_asset_id)
+        });
 
         // Start video processing in the background
         (async () => {
@@ -159,6 +244,17 @@ const uploadVideo = async (req, res) => {
                 const finalVideoRelativePath = path.relative(path.join(projectRoot, 'public'), finalVideoPath).replace(/\\/g, '/');
                 await uploadService.updateAttachmentByCodeId(code_id, {
                     uploded_video_path: finalVideoRelativePath
+                });
+                // Update generated video info with final video path and set generated flag
+                await uploadService.upsertGeneratedVideoInfo({
+                    main_id,
+                    file_path: finalVideoRelativePath,
+                    text,
+                    text_font_style: String(font_type_asset_id),
+                    text_font_color: String(font_color_asset_id),
+                    text_font_alignment: String(text_alignment),
+                    background_path: String(background_asset_id),
+                    overlay_path: String(overlay_asset_id)
                 });
 
                 // 6. Clean up merged file, chunks.txt, and chunk directory (optional)
@@ -439,7 +535,7 @@ const processMediaToVideoFromPath = async (req, res) => {
     }
     // Validate token (admin or user)
     const decoded = jwtUtils.verifyTokenAndRespond(res, token, process.env.JWT_SECRET);
-    
+    const main_id = decoded.code_id;
     if (!decoded) return;
     const userId = typeof decoded === 'object' && decoded.code_id ? decoded.code_id : decoded;
     // Find all files in the directory
@@ -619,6 +715,20 @@ const processMediaToVideoFromPath = async (req, res) => {
     }
     const fetched_font_type_asset_path = metas4.data[0].remarks;
     
+    // Upsert generated video info (initial record before processing)
+    // if (req.body.code_id) {
+      await uploadService.upsertGeneratedVideoInfo({
+        main_id,
+        file_path: null,
+        text,
+        text_font_style: String(font_type_asset_id),
+        text_font_color: String(font_color_asset_id),
+        text_font_alignment: String(text_alignment),
+        background_path: String(background_asset_id),
+        overlay_path: String(overlay_asset_id)
+      });
+    // }
+    
     const imagePathPrefix = path.join(videoDir, 'image'); // e.g., /finalvideo_2/image
     // Prepare all required paths and variables for the shell command
     const backgroundPath = path.join(projectRoot, `public${fetched_background_asset_path}`);
@@ -670,6 +780,17 @@ const processMediaToVideoFromPath = async (req, res) => {
           await uploadService.updateAttachmentByCodeId(req.body.code_id, {
             uploded_video_path: relativePath
           });
+          // Update generated video info with final video path metadata
+          await uploadService.upsertGeneratedVideoInfo({
+            main_id,
+            file_path: relativePath,
+            text,
+            text_font_style: String(font_type_asset_id),
+            text_font_color: String(font_color_asset_id),
+            text_font_alignment: String(text_alignment),
+            background_path: String(background_asset_id),
+            overlay_path: String(overlay_asset_id)
+          });
         }
       }
     });
@@ -684,6 +805,35 @@ const processMediaToVideoFromPath = async (req, res) => {
     }
 };
 
+// Check if user can download video
+const checkVideoDownload = async (req, res) => {
+    try {
+        const { token, id, code_id } = req.body;
+        if (!token || !id || !code_id) {
+            return response.validationError(res, 'token, id, and code_id are required');
+        }
+
+        // Verify token
+        const decoded = jwtUtils.verifyTokenAndRespond(res, token, process.env.JWT_SECRET);
+        if (!decoded) return;
+        const user_id = decoded;
+        if (code_id !== user_id.generated_code_id) {
+            return response.unauthorized(res, 'Invalid Code Id');
+        }
+
+        // Check download eligibility
+        const eligibility = await uploadService.checkVideoDownloadEligibility({ id, code_id });
+        if (!eligibility.success) {
+            return response.error(res, eligibility.error);
+        }
+
+        return response.success(res, eligibility, 'Download check completed');
+    } catch (error) {
+        console.error('Error in checkVideoDownload:', error);
+        return response.error(res, 'Failed to check download eligibility');
+    }
+};
+
 module.exports = {
     uploadVideo,
     getAttachment,
@@ -692,5 +842,7 @@ module.exports = {
     checkVideoStatus,
     uploadMediaFileChunkless,
     processMediaToVideoFromPath,
-    uploadMediaToVideoController
+    uploadMediaToVideoController,
+    publishFinalVideo,
+    checkVideoDownload
 }; 

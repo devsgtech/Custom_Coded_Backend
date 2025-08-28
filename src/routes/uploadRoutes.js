@@ -27,4 +27,10 @@ router.post('/upload-media-to-video', uploadMediaToVideo, uploadController.uploa
 router.post('/upload-media-file', upload.single('file'), uploadController.uploadMediaFileChunkless);
 router.post('/process-media-to-video', uploadController.processMediaToVideoFromPath);
 
+// Publish final video
+router.post('/publish', uploadController.publishFinalVideo);
+
+// Check video download eligibility
+router.post('/check-download', uploadController.checkVideoDownload);
+
 module.exports = router;
