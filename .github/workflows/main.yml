@@ -1,0 +1,35 @@
+name: Deploy Backend API
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy-backend:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        working-directory: backend-api
+        run: npm install --legacy-peer-deps
+
+      - name: Copy code to server folder
+        run: |
+          rm -rf /home/customcodedweb/backend-api/*
+          cp -r backend-api/* /home/customcodedweb/backend-api/
+
+      - name: Restart backend with PM2
+        run: pm2 restart all
+
+      - name: Run DB migrations
+        working-directory: /home/customcodedweb/backend-api
+        run: npx sequelize-cli db:migrate
