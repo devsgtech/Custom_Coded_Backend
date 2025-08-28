@@ -10,22 +10,23 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Copy source code to server folder
+      - name: Copy backend source to server folder
         run: |
-          rm -rf /home/customcodedweb/backend-api/*
-          cp -r src/* /home/customcodedweb/backend-api/
+          echo "Copying source files to /home/customcodedweb/backend-api..."
+          cp -r src/. /home/customcodedweb/backend-api/
+          chmod -R u+rwX /home/customcodedweb/backend-api
 
       - name: Install dependencies
         run: npm install --legacy-peer-deps
         working-directory: /home/customcodedweb/backend-api
 
-      - name: Restart PM2
+      - name: Restart PM2 processes
         run: pm2 restart all
         working-directory: /home/customcodedweb/backend-api
 
-      - name: Run migrations
+      - name: Run database migrations
         run: npx sequelize-cli db:migrate
         working-directory: /home/customcodedweb/backend-api
